@@ -21,17 +21,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Write Google Play release notes
+      - name: Prepare Google Play release notes
+        id: release-notes
         run: |
           node <<'NODE'
           const fs = require('fs');
 
           const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
           const releaseBody = event.release?.body ?? '';
-
-          if (!releaseBody.trim()) {
-            throw new Error('The GitHub release description is empty. Add English release notes before publishing the release.');
-          }
 
           function markdownToPlainText(markdown) {
             let text = markdown.replace(/\r\n?/g, '\n');
@@ -71,15 +68,20 @@ jobs:
           const maxCharacterCount = 500;
 
           if (!releaseNotes) {
-            throw new Error('The GitHub release description did not contain any plain-text release notes after Markdown formatting was removed.');
+            console.log('No plain-text release notes found. The Google Play release will be uploaded without release notes.');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_release_notes=false\n');
+            process.exit(0);
           }
 
           if (characterCount > maxCharacterCount) {
-            throw new Error(`Google Play release notes must be ${maxCharacterCount} characters or fewer per language. The plain-text English notes are ${characterCount} characters.`);
+            console.log(`Plain-text release notes are ${characterCount} characters, which is over Google Play's ${maxCharacterCount}-character limit. The Google Play release will be uploaded without release notes.`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_release_notes=false\n');
+            process.exit(0);
           }
 
           fs.mkdirSync('distribution/whatsnew', { recursive: true });
           fs.writeFileSync('distribution/whatsnew/whatsnew-en-US', `${releaseNotes}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_release_notes=true\n');
           NODE
 
       - name: Set up JDK 17
@@ -121,7 +123,8 @@ jobs:
       - name: Build release AAB
         run: flutter build appbundle --release
 
-      - name: Upload AAB to Google Play production
+      - name: Upload AAB to Google Play production with release notes
+        if: steps.release-notes.outputs.has_release_notes == 'true'
         uses: r0adkll/upload-google-play@v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -131,4 +134,16 @@ jobs:
           status: completed
           changesNotSentForReview: true
           whatsNewDirectory: distribution/whatsnew
+          releaseName: ${{ github.event.release.tag_name }}
+
+      - name: Upload AAB to Google Play production without release notes
+        if: steps.release-notes.outputs.has_release_notes != 'true'
+        uses: r0adkll/upload-google-play@v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: de.medformatik.adguard_home_client
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          tracks: production
+          status: completed
+          changesNotSentForReview: true
           releaseName: ${{ github.event.release.tag_name }}
