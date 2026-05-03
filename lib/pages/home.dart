@@ -1,6 +1,8 @@
 import 'package:adguard_home_client/interface/stats.dart';
 import 'package:adguard_home_client/main.dart';
 import 'package:adguard_home_client/pages/settings.dart';
+import 'package:adguard_home_client/utils/init.dart';
+import 'package:adguard_home_client/utils/instances.dart';
 import 'package:adguard_home_client/widgets/statistics_card.dart';
 import 'package:adguard_home_client/widgets/statistics_table_card.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +12,14 @@ class HomePage extends StatefulWidget {
 
   @override
   State<HomePage> createState() => _HomePageState();
+}
+
+class _SwitcherResult {
+  final bool manage;
+  final String? switchToId;
+  const _SwitcherResult._(this.manage, this.switchToId);
+  factory _SwitcherResult.manage() => const _SwitcherResult._(true, null);
+  factory _SwitcherResult.switchTo(String id) => _SwitcherResult._(false, id);
 }
 
 class _HomePageState extends State<HomePage> {
@@ -37,6 +47,72 @@ class _HomePageState extends State<HomePage> {
     }).catchError((_) {});
   }
 
+  Future<void> _showInstanceSwitcher(BuildContext context) async {
+    final result = await showModalBottomSheet<_SwitcherResult>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final instances = Instances.list();
+        final activeId = Instances.getActiveId();
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Switch instance', style: Theme.of(context).textTheme.titleMedium),
+                ),
+              ),
+              ...instances.map((i) {
+                final isActive = i.id == activeId;
+                return ListTile(
+                  leading: Icon(
+                    isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                    color: isActive ? Theme.of(context).colorScheme.primary : null,
+                  ),
+                  title: Text(i.name.isEmpty ? '(unnamed)' : i.name),
+                  subtitle: Text('${i.tls ? 'https' : 'http'}://${i.host}:${i.port}'),
+                  onTap: isActive ? null : () => Navigator.pop(context, _SwitcherResult.switchTo(i.id)),
+                );
+              }),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Manage instances'),
+                onTap: () => Navigator.pop(context, _SwitcherResult.manage()),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    if (result.manage) {
+      await Navigator.pushNamed(this.context, '/settings');
+      return;
+    }
+    if (result.switchToId != null) {
+      final ok = await initAdGuardHome(switchTo: result.switchToId);
+      if (!mounted) return;
+      if (ok) {
+        activeInstanceName.value = Instances.get(result.switchToId!)?.name;
+        protectionStatus.value = null;
+        setState(_load);
+        _protectionsKey.currentState?.reload();
+      } else {
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          SnackBar(
+            content: Text('Could not connect to "${Instances.get(result.switchToId!)?.name ?? "instance"}"'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _refresh() async {
     if (!instanceConfigured) return;
     setState(_load);
@@ -61,21 +137,44 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('AdGuard Home'),
-            FutureBuilder<String?>(
-              future: _version,
-              builder: (context, snapshot) {
-                return Text(
-                  snapshot.hasData ? snapshot.data! : 'Loading...',
-                  style: Theme.of(context).textTheme.bodySmall,
-                );
-              },
+        title: InkWell(
+          onTap: () => _showInstanceSwitcher(context),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ValueListenableBuilder<String?>(
+                        valueListenable: activeInstanceName,
+                        builder: (context, name, _) => Text(
+                          name?.isNotEmpty == true ? name! : 'AdGuard Home',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      FutureBuilder<String?>(
+                        future: _version,
+                        builder: (context, snapshot) {
+                          return Text(
+                            snapshot.hasData ? snapshot.data! : 'Loading...',
+                            style: Theme.of(context).textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down, size: 20),
+              ],
             ),
-          ],
+          ),
         ),
         actions: const [_QueryLogButton(), _SettingsButton(), _ProtectionToggleButton()],
       ),
