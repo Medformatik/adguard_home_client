@@ -9,22 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Medformatik/adguard_home_client/releases/latest">
-    <img alt="Latest release" src="https://img.shields.io/github/v/release/Medformatik/adguard_home_client?label=APK&color=blue" />
-  </a>
-  <a href="LICENSE">
-    <img alt="License" src="https://img.shields.io/github/license/Medformatik/adguard_home_client" />
-  </a>
+  <a href="https://github.com/Medformatik/adguard_home_client/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Medformatik/adguard_home_client?label=APK&color=blue" /></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/Medformatik/adguard_home_client" /></a>
 </p>
 
 <p align="center">
-  <a href="https://play.google.com/store/apps/details?id=de.medformatik.adguard_home_client">
-    <img alt="Get it on Google Play" height="88" align="middle" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" />
-  </a>
+  <a href="https://play.google.com/store/apps/details?id=de.medformatik.adguard_home_client"><img alt="Get it on Google Play" height="88" align="middle" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" /></a>
   &nbsp;
-  <a href="obtainium://add/https://github.com/Medformatik/adguard_home_client">
-    <img alt="Add to Obtainium" height="60" align="middle" src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" />
-  </a>
+  <a href="https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/Medformatik/adguard_home_client"><img alt="Add to Obtainium" height="60" align="middle" src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" /></a>
 </p>
 
 ## Features
