@@ -7,6 +7,9 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 
 AdGuardHome? adGuardHome;
 
+/// Shared protection state — both the AppBar toggle and the protections card listen to it.
+final ValueNotifier<bool?> protectionStatus = ValueNotifier(null);
+
 bool get instanceConfigured => adGuardHome != null;
 
 void main() async {

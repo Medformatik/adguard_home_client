@@ -1,51 +1,51 @@
-import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-class StatisticsCard extends StatefulWidget {
+final NumberFormat _intFormat = NumberFormat.decimalPattern();
+final DateFormat _tooltipDateFormat = DateFormat('y-MM-dd');
+
+String formatNumber(num value) {
+  if (value is int) return _intFormat.format(value);
+  return _intFormat.format(value);
+}
+
+class StatisticsCard extends StatelessWidget {
   final String title;
   final Color textColor;
-  final Color backgroundColor;
   final IconData? icon;
-  final Future<dynamic> primaryFuture;
+  final num primary;
   final String? primaryUnit;
-  final Future<dynamic>? secondaryFuture;
+  final num? secondary;
   final String? secondaryPrefix;
   final String? secondarySuffix;
-  final Future<List<num>>? graphFuture;
+  final List<num>? graph;
 
   const StatisticsCard({
     super.key,
-    required this.primaryFuture,
+    required this.primary,
     required this.title,
     this.textColor = Colors.black,
-    this.backgroundColor = Colors.white,
     this.icon,
     this.primaryUnit,
-    this.secondaryFuture,
+    this.secondary,
     this.secondaryPrefix,
     this.secondarySuffix,
-    this.graphFuture,
+    this.graph,
   });
 
-  @override
-  State<StatisticsCard> createState() => _StatisticsCardState();
-}
-
-class _StatisticsCardState extends State<StatisticsCard> {
-  late Future<dynamic>? primaryFuture;
-  late Future<dynamic>? secondaryFuture;
-  late Future<List<num>>? graphFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    primaryFuture = widget.primaryFuture;
-    secondaryFuture = widget.secondaryFuture;
-    graphFuture = widget.graphFuture;
-  }
+  String _format(num value) => formatNumber(value);
 
   @override
   Widget build(BuildContext context) {
+    final hasGraph = graph != null && graph!.any((v) => v != 0);
+    final primaryText = _format(primary) + (primaryUnit != null ? ' ${primaryUnit!}' : '');
+    final secondaryText = secondary == null
+        ? null
+        : '${secondaryPrefix != null ? '${secondaryPrefix!} ' : ''}'
+            '${_format(secondary!)}'
+            '${secondarySuffix != null ? ' ${secondarySuffix!}' : ''}';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(8.0),
@@ -54,119 +54,79 @@ class _StatisticsCardState extends State<StatisticsCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                widget.icon != null
-                    ? Icon(
-                        widget.icon,
-                        color: widget.textColor,
-                      )
-                    : Container(),
+                if (icon != null) Icon(icon, color: textColor),
                 const SizedBox(width: 8.0),
                 Expanded(
                   child: Text(
-                    widget.title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: widget.textColor),
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: textColor),
                   ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    FutureBuilder(
-                      future: primaryFuture,
-                      builder: (BuildContext context, AsyncSnapshot snapshot) {
-                        return Text(
-                          snapshot.hasData ? (snapshot.data.toString() + (widget.primaryUnit != null ? ' ${widget.primaryUnit!}' : '')) : '...',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(color: widget.textColor, fontSize: 20.0),
-                        );
-                      },
+                    Text(
+                      primaryText,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: textColor, fontSize: 20.0),
                     ),
-                    secondaryFuture != null
-                        ? FutureBuilder(
-                            future: secondaryFuture,
-                            builder: (BuildContext context, AsyncSnapshot snapshot) {
-                              return Text(
-                                snapshot.hasData
-                                    ? ((widget.secondaryPrefix != null ? '${widget.secondaryPrefix!} ' : '') +
-                                        snapshot.data.toString() +
-                                        (widget.secondarySuffix != null ? ' ${widget.secondarySuffix!}' : ''))
-                                    : '...',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: widget.textColor),
-                              );
-                            },
-                          )
-                        : Container(),
+                    if (secondaryText != null)
+                      Text(
+                        secondaryText,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: textColor),
+                      ),
                   ],
                 ),
               ],
             ),
-            graphFuture != null
-                ? FutureBuilder(
-                    future: graphFuture,
-                    builder: (BuildContext context, AsyncSnapshot snapshot) {
-                      if (!snapshot.hasData) {
-                        return const Padding(
-                          padding: EdgeInsets.fromLTRB(12.0, 24.0, 12.0, 8.0),
-                          child: SizedBox(height: 200, child: Center(child: CircularProgressIndicator())),
-                        );
-                      }
-
-                      List<FlSpot> spots = [];
-                      bool notZero = false; // Used to hide graph when all datapoints are zero
-                      for (var i = 0; i < snapshot.data.length; i++) {
-                        spots.add(FlSpot(i.toDouble(), snapshot.data[i].toDouble()));
-                        if (snapshot.data[i] != 0) notZero = true;
-                      }
-
-                      return Padding(
-                        padding: notZero ? const EdgeInsets.fromLTRB(12.0, 24.0, 12.0, 8.0) : const EdgeInsets.all(0.0),
-                        child: SizedBox(
-                          height: notZero ? 200 : 0,
-                          child: !notZero
-                              ? Container()
-                              : LineChart(
-                                  LineChartData(
-                                    gridData: FlGridData(show: false),
-                                    titlesData: FlTitlesData(show: false),
-                                    borderData: FlBorderData(show: false),
-                                    lineTouchData: LineTouchData(
-                                      touchTooltipData: LineTouchTooltipData(
-                                        fitInsideHorizontally: true,
-                                        fitInsideVertically: true,
-                                        getTooltipColor: (LineBarSpot touchedSpot) => widget.textColor.withValues(alpha: 0.8),
-                                        getTooltipItems: (touchedSpots) {
-                                          return touchedSpots.map<LineTooltipItem>((touchedSpot) {
-                                            DateTime date = DateTime.now().subtract(Duration(days: 89 - touchedSpot.x.toInt()));
-                                            return LineTooltipItem(
-                                              '${date.day}/${date.month}/${date.year}: ${touchedSpot.y.toInt()}',
-                                              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                            );
-                                          }).toList();
-                                        },
-                                      ),
-                                    ),
-                                    lineBarsData: [
-                                      LineChartBarData(
-                                        spots: spots,
-                                        isCurved: true,
-                                        isStrokeCapRound: true,
-                                        color: widget.textColor,
-                                        barWidth: 2,
-                                        dotData: FlDotData(show: false),
-                                        belowBarData: BarAreaData(
-                                          show: true,
-                                          color: widget.textColor.withValues(alpha: 0.3),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+            if (hasGraph)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12.0, 24.0, 12.0, 8.0),
+                child: SizedBox(
+                  height: 200,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: const FlGridData(show: false),
+                      titlesData: const FlTitlesData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineTouchData: LineTouchData(
+                        touchTooltipData: LineTouchTooltipData(
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipColor: (LineBarSpot s) => textColor.withValues(alpha: 0.8),
+                          getTooltipItems: (touchedSpots) {
+                            return touchedSpots.map<LineTooltipItem>((touchedSpot) {
+                              final lastIndex = graph!.length - 1;
+                              final date = DateTime.now().subtract(Duration(days: lastIndex - touchedSpot.x.toInt()));
+                              return LineTooltipItem(
+                                '${_tooltipDateFormat.format(date)}: ${_format(touchedSpot.y.toInt())}',
+                                const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              );
+                            }).toList();
+                          },
                         ),
-                      );
-                    },
-                  )
-                : Container(),
+                      ),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: [
+                            for (int i = 0; i < graph!.length; i++) FlSpot(i.toDouble(), graph![i].toDouble()),
+                          ],
+                          isCurved: true,
+                          isStrokeCapRound: true,
+                          color: textColor,
+                          barWidth: 2,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: textColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

@@ -18,6 +18,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late Future<String?> password;
 
   bool canPop = instanceConfigured;
+  bool _tls = SettingsValues.getTls();
+  bool _verifySsl = SettingsValues.getVerifySsl();
 
   @override
   void initState() {
@@ -48,6 +50,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final form = _formKey.currentState;
     if (form != null && form.validate()) {
       form.save();
+      SettingsValues.setTls(_tls);
+      SettingsValues.setVerifySsl(_verifySsl);
       canPop = await pop();
     }
   }
@@ -107,32 +111,19 @@ class _SettingsPageState extends State<SettingsPage> {
                           TextFormField(
                             decoration: const InputDecoration(
                               labelText: 'Host',
+                              hintText: 'IPv4, IPv6, or domain',
                               border: OutlineInputBorder(),
                             ),
                             initialValue: SettingsValues.getHost(),
-                            inputFormatters: [
-                              LengthLimitingTextInputFormatter(15),
-                            ],
+                            autocorrect: false,
+                            keyboardType: TextInputType.url,
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.trim().isEmpty) {
                                 return 'Host is required.';
-                              }
-                              RegExp ipRegExp = RegExp(
-                                r'^(?!0)(?!.*\.$)((1?\d?\d|25[0-5]|2[0-4]\d)(\.|$)){4}$',
-                                caseSensitive: false,
-                                multiLine: false,
-                              );
-                              RegExp domainRegExp = RegExp(
-                                r'^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](\.[a-zA-Z]{2,})+$',
-                                caseSensitive: false,
-                                multiLine: false,
-                              );
-                              if (!ipRegExp.hasMatch(value) && !domainRegExp.hasMatch(value)) {
-                                return 'Host must be a valid IP address or domain.';
                               }
                               return null;
                             },
-                            onSaved: (value) => SettingsValues.setHost(value ?? ''),
+                            onSaved: (value) => SettingsValues.setHost((value ?? '').trim()),
                           ),
 
                           // Port Field
@@ -158,6 +149,26 @@ class _SettingsPageState extends State<SettingsPage> {
                             },
                             onSaved: (value) => SettingsValues.setPort(int.parse(value ?? '0')),
                           ),
+
+                          // TLS toggle
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Use HTTPS'),
+                            subtitle: const Text('Connect over TLS'),
+                            value: _tls,
+                            onChanged: (v) => setState(() {
+                              _tls = v;
+                              if (!v) _verifySsl = true;
+                            }),
+                          ),
+                          if (_tls)
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Verify TLS certificate'),
+                              subtitle: const Text('Disable for self-signed certificates'),
+                              value: _verifySsl,
+                              onChanged: (v) => setState(() => _verifySsl = v),
+                            ),
 
                           // Username Field
                           TextFormField(
@@ -239,6 +250,12 @@ class SettingsValues {
 
   static int? getPort() => Hive.box(hiveBoxSettings).get('port');
   static void setPort(int value) => Hive.box(hiveBoxSettings).put('port', value);
+
+  static bool getTls() => Hive.box(hiveBoxSettings).get('tls', defaultValue: false);
+  static void setTls(bool value) => Hive.box(hiveBoxSettings).put('tls', value);
+
+  static bool getVerifySsl() => Hive.box(hiveBoxSettings).get('verifySsl', defaultValue: true);
+  static void setVerifySsl(bool value) => Hive.box(hiveBoxSettings).put('verifySsl', value);
 
   static String? getUsername() => Hive.box(hiveBoxSettings).get('username');
   static void setUsername(String value) => Hive.box(hiveBoxSettings).put('username', value);

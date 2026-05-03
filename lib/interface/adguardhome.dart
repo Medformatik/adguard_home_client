@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:adguard_home_client/interface/filtering.dart';
 import 'package:adguard_home_client/interface/parental.dart';
@@ -7,6 +9,8 @@ import 'package:adguard_home_client/interface/safebrowsing.dart';
 import 'package:adguard_home_client/interface/safesearch.dart';
 import 'package:adguard_home_client/interface/stats.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:flutter/foundation.dart';
 
 class AdGuardHome {
   final String host;
@@ -31,6 +35,9 @@ class AdGuardHome {
 
   bool get isDemo => host == 'demo.demo.demo' && port == 3000 && username == 'demo' && password == 'demo';
   bool _demoProtectionEnabled = true;
+  bool _demoSafeBrowsing = true;
+  bool _demoParental = false;
+  bool _demoSafeSearch = true;
 
   AdGuardHome({
     required this.host,
@@ -101,6 +108,8 @@ class AdGuardHome {
         response from the AdGuard Home instance (invalid data).
     */
 
+    if (isDemo) return _demoResponse(uri, data, params);
+
     String scheme = tls ? 'https' : 'http';
     String url = '$scheme://$host:$port$basePath/$uri';
 
@@ -125,6 +134,13 @@ class AdGuardHome {
           connectTimeout: Duration(milliseconds: requestTimeout),
         ),
       );
+      if (tls && !verifySsl) {
+        (_session!.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+          final client = HttpClient();
+          client.badCertificateCallback = (cert, host, port) => true;
+          return client;
+        };
+      }
       _closeSession = true;
     }
 
@@ -142,21 +158,14 @@ class AdGuardHome {
         ),
       );
     } on DioException catch (e) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx and is also not 304.
       if (e.response != null) {
-        print(e.response!.data);
-        print(e.response!.headers);
-        print(e.response!.requestOptions);
+        debugPrint('AdGuardHome request failed: ${e.response!.statusCode}');
       } else {
-        // Something happened in setting up or sending the request that triggered an Error
-        print(e.requestOptions);
-        print(e.message);
+        debugPrint('AdGuardHome request error: ${e.message}');
       }
     }
 
     if (response == null) {
-      print('No response');
       return {'error': 'No response'};
     }
 
@@ -164,7 +173,7 @@ class AdGuardHome {
 
     if ([4, 5].contains(response.statusCode! ~/ 100)) {
       if (contentType == 'application/json') {
-        print('AdGuardHomeError: ${response.statusCode}, ${response.data.toString()}');
+        debugPrint('AdGuardHomeError: ${response.statusCode}');
       }
     }
 
@@ -200,7 +209,8 @@ class AdGuardHome {
         data: {'protection_enabled': true},
       );
     } catch (e) {
-      print('AdGuardHomeError: Failed enabling AdGuard Home protection.');
+      debugPrint('AdGuardHomeError: Failed enabling AdGuard Home protection.');
+      rethrow;
     }
   }
 
@@ -221,7 +231,8 @@ class AdGuardHome {
         data: {'protection_enabled': false},
       );
     } catch (e) {
-      print('AdGuardHomeError: Failed disabling AdGuard Home protection.');
+      debugPrint('AdGuardHomeError: Failed disabling AdGuard Home protection.');
+      rethrow;
     }
   }
 
@@ -244,4 +255,128 @@ class AdGuardHome {
       _session!.close();
     }
   }
+
+  Map<String, dynamic> _demoResponse(String uri, dynamic data, Map<String, String>? params) {
+    switch (uri) {
+      case 'status':
+        return {'protection_enabled': _demoProtectionEnabled, 'version': 'Demo'};
+      case 'stats':
+        return _demoStatsPayload;
+      case 'stats_info':
+        return {'interval': 90};
+      case 'safebrowsing/status':
+        return {'enabled': _demoSafeBrowsing};
+      case 'safebrowsing/enable':
+        _demoSafeBrowsing = true;
+        return {};
+      case 'safebrowsing/disable':
+        _demoSafeBrowsing = false;
+        return {};
+      case 'parental/status':
+        return {'enabled': _demoParental};
+      case 'parental/enable':
+        _demoParental = true;
+        return {};
+      case 'parental/disable':
+        _demoParental = false;
+        return {};
+      case 'safesearch/status':
+        return {'enabled': _demoSafeSearch, 'bing': true, 'duckduckgo': true, 'google': true, 'yandex': true, 'youtube': true};
+      case 'safesearch/settings':
+        if (data is Map && data['enabled'] is bool) {
+          _demoSafeSearch = data['enabled'] as bool;
+        }
+        return {};
+      case 'querylog':
+        final search = params?['search']?.toLowerCase();
+        if (search == null || search.isEmpty) return {'data': _demoQueryLog};
+        return {
+          'data': [
+            for (final entry in _demoQueryLog)
+              if ((entry['question']?['name'] ?? '').toString().toLowerCase().contains(search) ||
+                  (entry['client'] ?? '').toString().toLowerCase().contains(search))
+                entry,
+          ],
+        };
+    }
+    return {};
+  }
+
+  static final Map<String, dynamic> _demoStatsPayload = (() {
+    final rng = Random(42);
+    List<int> series(int base, int variance) =>
+        List<int>.generate(90, (i) => (base + rng.nextInt(variance) - variance ~/ 2).clamp(0, 1 << 31));
+    final dnsQueries = series(1500, 800);
+    final blockedFiltering = series(380, 200);
+    final replacedSafebrowsing = series(8, 16);
+    final replacedParental = series(2, 6);
+    final totalQueries = dnsQueries.fold<int>(0, (a, b) => a + b);
+    final totalBlocked = blockedFiltering.fold<int>(0, (a, b) => a + b);
+    final totalSafebrowsing = replacedSafebrowsing.fold<int>(0, (a, b) => a + b);
+    final totalParental = replacedParental.fold<int>(0, (a, b) => a + b);
+    return {
+      'num_dns_queries': totalQueries,
+      'num_blocked_filtering': totalBlocked,
+      'num_replaced_safebrowsing': totalSafebrowsing,
+      'num_replaced_parental': totalParental,
+      'num_replaced_safesearch': 124,
+      'avg_processing_time': 0.0124,
+      'top_queried_domains': const [
+        {'play.googleapis.com': 12345},
+        {'apple.com': 8124},
+        {'github.com': 6532},
+        {'cloudflare.com': 5421},
+        {'wikipedia.org': 4127},
+      ],
+      'top_blocked_domains': const [
+        {'doubleclick.net': 4321},
+        {'googlesyndication.com': 3210},
+        {'facebook.com': 2890},
+        {'analytics.google.com': 1842},
+        {'ads.youtube.com': 1457},
+      ],
+      'top_clients': const [
+        {'192.168.1.10': 18432},
+        {'192.168.1.42': 12891},
+        {'192.168.1.5': 7321},
+        {'192.168.1.78': 4128},
+      ],
+      'dns_queries': dnsQueries,
+      'blocked_filtering': blockedFiltering,
+      'replaced_safebrowsing': replacedSafebrowsing,
+      'replaced_parental': replacedParental,
+    };
+  })();
+
+  static final List<Map<String, dynamic>> _demoQueryLog = (() {
+    final now = DateTime.now().toUtc();
+    final samples = <Map<String, dynamic>>[
+      {'name': 'play.googleapis.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
+      {'name': 'doubleclick.net', 'reason': 'FilteredBlackList', 'rule': '||doubleclick.net^', 'client': '192.168.1.42'},
+      {'name': 'github.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
+      {'name': 'malware.example.org', 'reason': 'FilteredSafeBrowsing', 'client': '192.168.1.5'},
+      {'name': 'ads.facebook.com', 'reason': 'FilteredBlackList', 'rule': '||facebook.com^', 'client': '192.168.1.78'},
+      {'name': 'youtube.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
+      {'name': 'adult.example.com', 'reason': 'FilteredParental', 'client': '192.168.1.78'},
+      {'name': 'cloudflare.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.42'},
+      {'name': 'analytics.google.com', 'reason': 'FilteredBlackList', 'rule': '||google-analytics.com^', 'client': '192.168.1.10'},
+      {'name': 'wikipedia.org', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.5'},
+      {'name': 'tracker.example.net', 'reason': 'FilteredBlackList', 'rule': '||tracker.example.net^', 'client': '192.168.1.42'},
+      {'name': 'apple.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
+    ];
+    return [
+      for (int i = 0; i < samples.length; i++)
+        {
+          'time': now.subtract(Duration(minutes: i * 4 + 1)).toIso8601String(),
+          'question': {'name': samples[i]['name'], 'type': 'A', 'class': 'IN'},
+          'answer': [
+            {'value': samples[i]['reason'].toString().startsWith('Filtered') ? '0.0.0.0' : '93.184.216.34'},
+          ],
+          'reason': samples[i]['reason'],
+          'elapsedMs': (0.4 + i * 0.13).toStringAsFixed(4),
+          if (samples[i]['rule'] != null) 'rule': samples[i]['rule'],
+          'client': samples[i]['client'],
+        },
+    ];
+  })();
 }

@@ -1,16 +1,16 @@
 import 'package:adguard_home_client/interface/adguardhome.dart';
 import 'package:adguard_home_client/main.dart';
 import 'package:adguard_home_client/pages/settings.dart';
+import 'package:flutter/foundation.dart';
 
 Future<bool> initAdGuardHome() async {
-  print('Initializing AdGuardHome instance');
-  print('Host: ${SettingsValues.getHost()}');
-  print('Port: ${SettingsValues.getPort()}');
-  print('Username: ${SettingsValues.getUsername()}');
+  debugPrint('Initializing AdGuardHome instance');
 
   adGuardHome = AdGuardHome(
     host: SettingsValues.getHost()!,
     port: SettingsValues.getPort()!,
+    tls: SettingsValues.getTls(),
+    verifySsl: SettingsValues.getVerifySsl(),
     username: SettingsValues.getUsername()!,
     password: (await SettingsValues.getPassword())!,
   );

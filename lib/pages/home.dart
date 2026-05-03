@@ -1,3 +1,4 @@
+import 'package:adguard_home_client/interface/stats.dart';
 import 'package:adguard_home_client/main.dart';
 import 'package:adguard_home_client/pages/settings.dart';
 import 'package:adguard_home_client/widgets/statistics_card.dart';
@@ -12,196 +13,502 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late Future<String?>? version;
+  Future<StatsSnapshot>? _snapshot;
+  StatsSnapshot? _lastSnapshot;
+  Future<String?>? _version;
+  final _protectionsKey = GlobalKey<_ProtectionsCardState>();
 
   @override
   void initState() {
     super.initState();
     if (instanceConfigured) {
-      version = adGuardHome!.version();
+      _load();
+    }
+  }
+
+  void _load() {
+    adGuardHome!.stats.refresh();
+    final fut = adGuardHome!.stats.snapshot();
+    _snapshot = fut;
+    _version = adGuardHome!.version();
+    fut.then((snap) {
+      if (!mounted) return;
+      setState(() => _lastSnapshot = snap);
+    }).catchError((_) {});
+  }
+
+  Future<void> _refresh() async {
+    if (!instanceConfigured) return;
+    setState(_load);
+    _protectionsKey.currentState?.reload();
+    try {
+      await _snapshot;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to refresh: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return !instanceConfigured
-        ? const SettingsPage()
-        : Scaffold(
-            appBar: AppBar(
-              title: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('AdGuard Home'),
-                  FutureBuilder(
-                    future: version,
-                    builder: (BuildContext context, AsyncSnapshot snapshot) {
-                      return Text(
-                        snapshot.hasData ? snapshot.data : 'Loading...',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      );
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                _SettingsButton(),
-                _ProtectionToggleButton(key: UniqueKey()),
-              ],
-            ),
-            body: SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: 16.0,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8.0, 0, 0.0, 0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const _StatisticsHeadline(),
-                            SizedBox(
-                              height: 40.0,
-                              child: CircleAvatar(
-                                radius: 30.0,
-                                backgroundColor: Colors.green,
-                                child: GestureDetector(
-                                  onTap: () => setState(() {}),
-                                  child: const Icon(
-                                    Icons.refresh,
-                                    color: Colors.white,
-                                    size: 24.0,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      StatisticsCard(
-                        key: UniqueKey(),
-                        primaryFuture: adGuardHome!.stats.dnsQueries(),
-                        secondaryFuture: adGuardHome!.stats.avgProcessingTime(),
-                        secondaryPrefix: '~',
-                        secondarySuffix: 'ms',
-                        graphFuture: adGuardHome!.stats.dnsQueriesPerDay(),
-                        title: 'DNS Queries',
-                        textColor: Colors.blue,
-                        icon: Icons.dns,
-                      ),
-                      StatisticsCard(
-                        key: UniqueKey(),
-                        primaryFuture: adGuardHome!.stats.blockedFiltering(),
-                        secondaryFuture: adGuardHome!.stats.blockedPercentage(),
-                        secondarySuffix: '%',
-                        graphFuture: adGuardHome!.stats.blockedFilteringPerDay(),
-                        title: 'Blocked by Filters',
-                        textColor: Colors.red,
-                        icon: Icons.security,
-                      ),
-                      StatisticsCard(
-                        key: UniqueKey(),
-                        primaryFuture: adGuardHome!.stats.replacedSafebrowsing(),
-                        graphFuture: adGuardHome!.stats.replacedSafebrowsingPerDay(),
-                        title: 'Blocked malware/phishing',
-                        textColor: Colors.green[500]!,
-                        icon: Icons.coronavirus,
-                      ),
-                      StatisticsCard(
-                        key: UniqueKey(),
-                        primaryFuture: adGuardHome!.stats.replacedParental(),
-                        graphFuture: adGuardHome!.stats.replacedParentalPerDay(),
-                        title: 'Blocked adult websites',
-                        textColor: Colors.yellow[700]!,
-                        icon: Icons.person,
-                      ),
-                      StatisticsCard(
-                        key: UniqueKey(),
-                        primaryFuture: adGuardHome!.stats.replacedSafesearch(),
-                        title: 'Enforced safe search',
-                        textColor: Colors.purple[500]!,
-                        icon: Icons.search,
-                      ),
-                      StatisticsTableCard(
-                        key: UniqueKey(),
-                        future: adGuardHome!.stats.topQueriedDomains(),
-                        totalFuture: adGuardHome!.stats.dnsQueries(),
-                        title: 'Top queried domains',
-                        keyColumn: 'Domain',
-                        valueColumn: 'Request count',
-                        textColor: Colors.blue,
-                        icon: Icons.dns,
-                      ),
-                      StatisticsTableCard(
-                        key: UniqueKey(),
-                        future: adGuardHome!.stats.topBlockedDomains(),
-                        totalFuture: adGuardHome!.stats.blockedFiltering(),
-                        title: 'Top blocked domains',
-                        keyColumn: 'Domain',
-                        valueColumn: 'Request count',
-                        textColor: Colors.red,
-                        icon: Icons.security,
-                      ),
-                      StatisticsTableCard(
-                        key: UniqueKey(),
-                        future: adGuardHome!.stats.topClients(),
-                        totalFuture: adGuardHome!.stats.dnsQueries(),
-                        title: 'Top clients',
-                        keyColumn: 'Client',
-                        valueColumn: 'Request count',
-                        textColor: Colors.black,
-                        icon: Icons.people,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-  }
-}
+    if (!instanceConfigured) return const SettingsPage();
 
-class _SettingsButton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: IconButton.filled(
-        style: IconButton.styleFrom(
-          backgroundColor: Colors.blue[700],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25.0)),
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('AdGuard Home'),
+            FutureBuilder<String?>(
+              future: _version,
+              builder: (context, snapshot) {
+                return Text(
+                  snapshot.hasData ? snapshot.data! : 'Loading...',
+                  style: Theme.of(context).textTheme.bodySmall,
+                );
+              },
+            ),
+          ],
         ),
-        icon: const Icon(
-          Icons.settings,
-          color: Colors.white,
+        actions: const [_QueryLogButton(), _SettingsButton(), _ProtectionToggleButton()],
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: FutureBuilder<StatsSnapshot>(
+            future: _snapshot,
+            builder: (context, asyncSnap) {
+              final data = asyncSnap.data ?? _lastSnapshot;
+              if (data != null) {
+                return _scrollable(_StatsBody(snapshot: data, protectionsKey: _protectionsKey));
+              }
+              if (asyncSnap.hasError) {
+                return _scrollable(_ErrorBlock(
+                  message: 'Could not load statistics.',
+                  onRetry: _refresh,
+                ));
+              }
+              return _scrollable(const Padding(
+                padding: EdgeInsets.symmetric(vertical: 96),
+                child: Center(child: CircularProgressIndicator()),
+              ));
+            },
+          ),
         ),
-        onPressed: () {
-          Navigator.pushNamed(context, '/settings');
-        },
+      ),
+    );
+  }
+
+  Widget _scrollable(Widget child) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: child,
       ),
     );
   }
 }
 
-class _ProtectionToggleButton extends StatefulWidget {
-  const _ProtectionToggleButton({super.key});
+class _StatsBody extends StatelessWidget {
+  final StatsSnapshot snapshot;
+  final Key? protectionsKey;
+  const _StatsBody({required this.snapshot, this.protectionsKey});
 
   @override
-  State<_ProtectionToggleButton> createState() => __ProtectionToggleButtonState();
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 16.0,
+      children: [
+        _ProtectionsCard(key: protectionsKey),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8.0, 0, 0.0, 0),
+          child: Text(
+            'Statistics for the last ${snapshot.period} days',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+        ),
+        StatisticsCard(
+          primary: snapshot.dnsQueries,
+          secondary: snapshot.avgProcessingTime,
+          secondaryPrefix: '~',
+          secondarySuffix: 'ms',
+          graph: snapshot.dnsQueriesPerDay,
+          title: 'DNS Queries',
+          textColor: Colors.blue,
+          icon: Icons.dns,
+        ),
+        StatisticsCard(
+          primary: snapshot.blockedFiltering,
+          secondary: snapshot.blockedPercentage,
+          secondarySuffix: '%',
+          graph: snapshot.blockedFilteringPerDay,
+          title: 'Blocked by Filters',
+          textColor: Colors.red,
+          icon: Icons.security,
+        ),
+        StatisticsCard(
+          primary: snapshot.replacedSafebrowsing,
+          graph: snapshot.replacedSafebrowsingPerDay,
+          title: 'Blocked malware/phishing',
+          textColor: Colors.green[500]!,
+          icon: Icons.coronavirus,
+        ),
+        StatisticsCard(
+          primary: snapshot.replacedParental,
+          graph: snapshot.replacedParentalPerDay,
+          title: 'Blocked adult websites',
+          textColor: Colors.yellow[700]!,
+          icon: Icons.person,
+        ),
+        StatisticsCard(
+          primary: snapshot.replacedSafesearch,
+          title: 'Enforced safe search',
+          textColor: Colors.purple[500]!,
+          icon: Icons.search,
+        ),
+        StatisticsTableCard(
+          data: snapshot.topQueriedDomains,
+          total: snapshot.dnsQueries,
+          title: 'Top queried domains',
+          keyColumn: 'Domain',
+          valueColumn: 'Count',
+          textColor: Colors.blue,
+          icon: Icons.dns,
+        ),
+        StatisticsTableCard(
+          data: snapshot.topBlockedDomains,
+          total: snapshot.blockedFiltering,
+          title: 'Top blocked domains',
+          keyColumn: 'Domain',
+          valueColumn: 'Count',
+          textColor: Colors.red,
+          icon: Icons.security,
+        ),
+        StatisticsTableCard(
+          data: snapshot.topClients,
+          total: snapshot.dnsQueries,
+          title: 'Top clients',
+          keyColumn: 'Client',
+          valueColumn: 'Count',
+          textColor: scheme.onSurface,
+          icon: Icons.people,
+        ),
+      ],
+    );
+  }
 }
 
-class __ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
-  late Future<bool?>? protectionEnabled;
+class _ProtectionsCard extends StatefulWidget {
+  const _ProtectionsCard({super.key});
+
+  @override
+  State<_ProtectionsCard> createState() => _ProtectionsCardState();
+}
+
+class _ProtectionsCardState extends State<_ProtectionsCard> {
+  bool? _safeBrowsing;
+  bool? _parental;
+  bool? _safeSearch;
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    if (instanceConfigured) {
-      protectionEnabled = adGuardHome!.protectionEnabled();
+    _load();
+  }
+
+  void reload() => _load();
+
+  Future<void> _load() async {
+    final hasData = _safeBrowsing != null;
+    if (!hasData) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final results = await Future.wait([
+        adGuardHome!.protectionEnabled(),
+        adGuardHome!.safeBrowsing.enabled(),
+        adGuardHome!.parental.enabled(),
+        adGuardHome!.safeSearch.enabled(),
+      ]);
+      if (!mounted) return;
+      protectionStatus.value = results[0];
+      setState(() {
+        _safeBrowsing = results[1];
+        _parental = results[2];
+        _safeSearch = results[3];
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (!hasData) _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _toggleProtection() async {
+    final current = protectionStatus.value;
+    if (current == null) return;
+    final next = !current;
+    protectionStatus.value = next;
+    try {
+      if (next) {
+        await adGuardHome!.enableProtection();
+      } else {
+        await adGuardHome!.disableProtection();
+      }
+    } catch (e) {
+      protectionStatus.value = current;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update Protection'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggle({
+    required String label,
+    required bool current,
+    required Future<void> Function(bool) apply,
+    required void Function(bool) commit,
+  }) async {
+    final next = !current;
+    commit(next);
+    try {
+      await apply(next);
+    } catch (e) {
+      if (!mounted) return;
+      commit(current);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update $label'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: _loading
+            ? const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : _error != null
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        const Expanded(child: Text('Could not load protection settings.')),
+                        TextButton(onPressed: _load, child: const Text('Retry')),
+                      ],
+                    ),
+                  )
+                : Column(
+                    children: [
+                      ValueListenableBuilder<bool?>(
+                        valueListenable: protectionStatus,
+                        builder: (context, value, _) => _CompactToggle(
+                          label: 'Protection',
+                          icon: Icons.shield,
+                          value: value ?? false,
+                          onChanged: _toggleProtection,
+                        ),
+                      ),
+                      _CompactToggle(
+                        label: 'Safe Browsing',
+                        icon: Icons.coronavirus,
+                        value: _safeBrowsing!,
+                        onChanged: () => _toggle(
+                          label: 'Safe Browsing',
+                          current: _safeBrowsing!,
+                          apply: (next) => next ? adGuardHome!.safeBrowsing.enable() : adGuardHome!.safeBrowsing.disable(),
+                          commit: (val) => setState(() => _safeBrowsing = val),
+                        ),
+                      ),
+                      _CompactToggle(
+                        label: 'Parental Control',
+                        icon: Icons.person,
+                        value: _parental!,
+                        onChanged: () => _toggle(
+                          label: 'Parental Control',
+                          current: _parental!,
+                          apply: (next) => next ? adGuardHome!.parental.enable() : adGuardHome!.parental.disable(),
+                          commit: (val) => setState(() => _parental = val),
+                        ),
+                      ),
+                      _CompactToggle(
+                        label: 'Safe Search',
+                        icon: Icons.search,
+                        value: _safeSearch!,
+                        onChanged: () => _toggle(
+                          label: 'Safe Search',
+                          current: _safeSearch!,
+                          apply: (next) => adGuardHome!.safeSearch.setEnabled(next),
+                          commit: (val) => setState(() => _safeSearch = val),
+                        ),
+                      ),
+                    ],
+                  ),
+      ),
+    );
+  }
+}
+
+class _CompactToggle extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool value;
+  final VoidCallback onChanged;
+
+  const _CompactToggle({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onChanged,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text(label)),
+            Transform.scale(
+              scale: 0.8,
+              child: Switch(
+                value: value,
+                onChanged: (_) => onChanged(),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBlock extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+  const _ErrorBlock({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 64),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+          const SizedBox(height: 12),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QueryLogButton extends StatelessWidget {
+  const _QueryLogButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.list_alt),
+      tooltip: 'Query log',
+      onPressed: () => Navigator.pushNamed(context, '/querylog'),
+    );
+  }
+}
+
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton.filledTonal(
+      icon: const Icon(Icons.settings),
+      tooltip: 'Settings',
+      onPressed: () => Navigator.pushNamed(context, '/settings'),
+    );
+  }
+}
+
+class _ProtectionToggleButton extends StatefulWidget {
+  const _ProtectionToggleButton();
+
+  @override
+  State<_ProtectionToggleButton> createState() => _ProtectionToggleButtonState();
+}
+
+class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
+  @override
+  void initState() {
+    super.initState();
+    if (instanceConfigured && protectionStatus.value == null) {
+      adGuardHome!.protectionEnabled().then((v) {
+        if (mounted) protectionStatus.value = v;
+      }).catchError((_) {});
+    }
+  }
+
+  Future<void> _toggle() async {
+    final current = protectionStatus.value;
+    if (current == null) return;
+    final next = !current;
+    protectionStatus.value = next;
+    try {
+      if (next) {
+        await adGuardHome!.enableProtection();
+      } else {
+        await adGuardHome!.disableProtection();
+      }
+    } catch (e) {
+      protectionStatus.value = current;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not toggle protection: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -209,94 +516,30 @@ class __ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: FutureBuilder(
-        future: protectionEnabled,
-        builder: (BuildContext context, AsyncSnapshot snapshot) {
-          if (!snapshot.hasData) {
-            return IconButton(
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.grey[300],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25.0)),
+      child: ValueListenableBuilder<bool?>(
+        valueListenable: protectionStatus,
+        builder: (context, value, _) {
+          if (value == null) {
+            return IconButton.filledTonal(
+              icon: const SizedBox(
+                height: 16,
+                width: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              icon: SizedBox(
-                height: 16.0,
-                width: 16.0,
-                child: CircularProgressIndicator(
-                  color: Colors.black,
-                ),
-              ),
-              onPressed: () {},
+              onPressed: null,
             );
           }
-          return snapshot.data
-              ? IconButton.filled(
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25.0)),
-                  ),
-                  icon: Icon(
-                    Icons.close,
-                    color: Colors.white,
-                  ),
-                  onPressed: () async {
-                    await adGuardHome!.disableProtection();
-                    setState(() {
-                      protectionEnabled = adGuardHome!.protectionEnabled();
-                    });
-                  },
-                )
-              : IconButton(
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25.0)),
-                  ),
-                  icon: Icon(
-                    Icons.check,
-                    color: Colors.white,
-                  ),
-                  onPressed: () async {
-                    await adGuardHome!.enableProtection();
-                    setState(() {
-                      protectionEnabled = adGuardHome!.protectionEnabled();
-                    });
-                  },
-                );
+          return IconButton.filled(
+            style: IconButton.styleFrom(
+              backgroundColor: value ? Colors.red : Colors.green[700],
+              foregroundColor: Colors.white,
+            ),
+            icon: Icon(value ? Icons.shield_outlined : Icons.shield),
+            tooltip: value ? 'Disable protection' : 'Enable protection',
+            onPressed: _toggle,
+          );
         },
       ),
-    );
-  }
-}
-
-class _StatisticsHeadline extends StatefulWidget {
-  const _StatisticsHeadline();
-
-  @override
-  State<_StatisticsHeadline> createState() => __StatisticsHeadlineState();
-}
-
-class __StatisticsHeadlineState extends State<_StatisticsHeadline> {
-  late Future<int>? period;
-
-  @override
-  void initState() {
-    super.initState();
-    if (instanceConfigured) {
-      period = adGuardHome!.stats.period();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: period,
-      builder: (BuildContext context, AsyncSnapshot snapshot) {
-        return Expanded(
-          child: Text(
-            "Statistics for the last ${snapshot.data ?? "..."} days",
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.grey[800]),
-          ),
-        );
-      },
     );
   }
 }
