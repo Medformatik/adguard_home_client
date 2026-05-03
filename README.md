@@ -33,7 +33,7 @@
 ## Install
 
 - **Google Play:** [play.google.com/store/apps/details?id=de.medformatik.adguard_home_client](https://play.google.com/store/apps/details?id=de.medformatik.adguard_home_client)
-- **APK from GitHub:** every tagged release ships a signed APK. Grab it from the [latest release](https://github.com/Medformatik/adguard_home_client/releases/latest) — both `app-release.apk` and a versioned `adguard-home-client-<version>.apk` are attached.
+- **APK from GitHub:** every tagged release ships a signed `app-release.apk`. Grab it from the [latest release](https://github.com/Medformatik/adguard_home_client/releases/latest).
 
 ## Screenshots
 

@@ -56,33 +56,15 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Read pubspec version
-        id: version
-        run: |
-          VERSION=$(grep -E '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Rename APK with version
-        id: rename
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          SRC=build/app/outputs/flutter-apk/app-release.apk
-          DEST="build/app/outputs/flutter-apk/adguard-home-client-$VERSION.apk"
-          cp "$SRC" "$DEST"
-          echo "path=$DEST" >> "$GITHUB_OUTPUT"
-
       - name: Upload to release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            build/app/outputs/flutter-apk/app-release.apk
-            ${{ steps.rename.outputs.path }}
+          files: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload APK as workflow artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v7
         with:
           name: app-release-apk
-          path: ${{ steps.rename.outputs.path }}
+          path: build/app/outputs/flutter-apk/app-release.apk
