@@ -9,14 +9,21 @@
 </p>
 
 <p align="center">
-  <a href="https://play.google.com/store/apps/details?id=de.medformatik.adguard_home_client">
-    <img alt="Get it on Google Play" src="https://img.shields.io/badge/Google%20Play-Install-34A853?logo=googleplay&logoColor=white" />
-  </a>
   <a href="https://github.com/Medformatik/adguard_home_client/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/Medformatik/adguard_home_client?label=APK&color=blue" />
   </a>
   <a href="LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/Medformatik/adguard_home_client" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=de.medformatik.adguard_home_client">
+    <img alt="Get it on Google Play" height="88" align="middle" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" />
+  </a>
+  &nbsp;
+  <a href="obtainium://add/https://github.com/Medformatik/adguard_home_client">
+    <img alt="Add to Obtainium" height="60" align="middle" src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" />
   </a>
 </p>
 
@@ -34,11 +41,17 @@
 
 - **Google Play:** [play.google.com/store/apps/details?id=de.medformatik.adguard_home_client](https://play.google.com/store/apps/details?id=de.medformatik.adguard_home_client)
 - **APK from GitHub:** every tagged release ships a signed `app-release.apk`. Grab it from the [latest release](https://github.com/Medformatik/adguard_home_client/releases/latest).
+- **[Obtainium](https://github.com/ImranR98/Obtainium):** tap the badge above, or paste this into Obtainium's "Add App" → "Import URL" field:
+  ```
+  https://github.com/Medformatik/adguard_home_client
+  ```
 
 ## Screenshots
 
-<img src="assets/images/play-store/screenshots/Google%20Pixel%204%20XL%20%281520x3040%29/Google%20Pixel%204%20XL%20Screenshot%200.png" height="400" alt="Home screen with stats" />
-<img src="assets/images/play-store/screenshots/Google%20Pixel%204%20XL%20%281520x3040%29/Google%20Pixel%204%20XL%20Screenshot%201.png" height="400" alt="Top domains and clients" />
+<p>
+  <img src="assets/images/play-store/screenshots/Google%20Pixel%204%20XL%20%281520x3040%29/Google%20Pixel%204%20XL%20Screenshot%200.png" height="400" alt="Home screen with stats" />
+  <img src="assets/images/play-store/screenshots/Google%20Pixel%204%20XL%20%281520x3040%29/Google%20Pixel%204%20XL%20Screenshot%201.png" height="400" alt="Top domains and clients" />
+</p>
 
 ## Setup
 
