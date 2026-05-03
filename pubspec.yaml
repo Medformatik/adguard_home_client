@@ -6,16 +6,16 @@ publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.10.7
+  sdk: ^3.11.5
 
 dependencies:
-  dio: ^5.9.0
-  fl_chart: ^1.1.1
+  dio: ^5.9.2
+  fl_chart: ^1.2.0
   flutter:
     sdk: flutter
   flutter_secure_storage: ^10.0.0
   fluttertoast: ^9.0.0
-  hive_ce: ^2.18.0
+  hive_ce: ^2.19.3
   hive_ce_flutter: ^2.3.4
   http: ^1.6.0
 
