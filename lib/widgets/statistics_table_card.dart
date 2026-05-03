@@ -102,7 +102,7 @@ class StatisticsTableCard extends StatelessWidget {
                             columnSpacing: 0,
                             headingRowHeight: 32,
                             dataRowMinHeight: 28,
-                            dataRowMaxHeight: 32,
+                            dataRowMaxHeight: double.infinity,
                             headingRowColor: WidgetStateProperty.all<Color>(textColor.withValues(alpha: 0.2)),
                             columns: _getColumns(constraints),
                             rows: data.entries.map<DataRow>((row) {

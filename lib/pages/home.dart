@@ -1,6 +1,7 @@
 import 'package:adguard_home_client/interface/stats.dart';
 import 'package:adguard_home_client/main.dart';
 import 'package:adguard_home_client/pages/settings.dart';
+import 'package:adguard_home_client/utils/datasource.dart';
 import 'package:adguard_home_client/utils/init.dart';
 import 'package:adguard_home_client/utils/instances.dart';
 import 'package:adguard_home_client/widgets/statistics_card.dart';
@@ -37,10 +38,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _load() {
-    adGuardHome!.stats.refresh();
-    final fut = adGuardHome!.stats.snapshot();
+    final ds = dataSource!;
+    ds.invalidateStats();
+    final fut = ds.snapshot();
     _snapshot = fut;
-    _version = adGuardHome!.version();
+    _version = ds.version();
     fut.then((snap) {
       if (!mounted) return;
       setState(() => _lastSnapshot = snap);
@@ -65,16 +67,24 @@ class _HomePageState extends State<HomePage> {
                   child: Text('Switch instance', style: Theme.of(context).textTheme.titleMedium),
                 ),
               ),
+              if (instances.length >= 2)
+                _switcherTile(
+                  context,
+                  isActive: activeId == Instances.unifiedId,
+                  icon: Icons.merge_type,
+                  title: 'Unified',
+                  subtitle: 'Aggregated across all instances',
+                  onTap: () => Navigator.pop(context, _SwitcherResult.switchTo(Instances.unifiedId)),
+                ),
               ...instances.map((i) {
                 final isActive = i.id == activeId;
-                return ListTile(
-                  leading: Icon(
-                    isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                    color: isActive ? Theme.of(context).colorScheme.primary : null,
-                  ),
-                  title: Text(i.name.isEmpty ? '(unnamed)' : i.name),
-                  subtitle: Text('${i.tls ? 'https' : 'http'}://${i.host}:${i.port}'),
-                  onTap: isActive ? null : () => Navigator.pop(context, _SwitcherResult.switchTo(i.id)),
+                return _switcherTile(
+                  context,
+                  isActive: isActive,
+                  icon: null,
+                  title: i.name.isEmpty ? '(unnamed)' : i.name,
+                  subtitle: '${i.tls ? 'https' : 'http'}://${i.host}:${i.port}',
+                  onTap: () => Navigator.pop(context, _SwitcherResult.switchTo(i.id)),
                 );
               }),
               const Divider(height: 1),
@@ -98,19 +108,38 @@ class _HomePageState extends State<HomePage> {
       final ok = await initAdGuardHome(switchTo: result.switchToId);
       if (!mounted) return;
       if (ok) {
-        activeInstanceName.value = Instances.get(result.switchToId!)?.name;
-        protectionStatus.value = null;
+        activeInstanceName.value = activeLabelFor(result.switchToId);
+        protectionStatus.value = ToggleState.loading;
         setState(_load);
         _protectionsKey.currentState?.reload();
       } else {
         ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(
-            content: Text('Could not connect to "${Instances.get(result.switchToId!)?.name ?? "instance"}"'),
+            content: Text('Could not connect to "${activeLabelFor(result.switchToId) ?? "instance"}"'),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
+  }
+
+  Widget _switcherTile(
+    BuildContext context, {
+    required bool isActive,
+    required IconData? icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(
+        isActive ? Icons.radio_button_checked : (icon ?? Icons.radio_button_unchecked),
+        color: isActive ? Theme.of(context).colorScheme.primary : null,
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      onTap: isActive ? null : onTap,
+    );
   }
 
   Future<void> _refresh() async {
@@ -315,9 +344,10 @@ class _ProtectionsCard extends StatefulWidget {
 }
 
 class _ProtectionsCardState extends State<_ProtectionsCard> {
-  bool? _safeBrowsing;
-  bool? _parental;
-  bool? _safeSearch;
+  ToggleState _safeBrowsing = ToggleState.loading;
+  ToggleState _parental = ToggleState.loading;
+  ToggleState _safeSearch = ToggleState.loading;
+  bool _loaded = false;
   bool _loading = true;
   String? _error;
 
@@ -330,19 +360,19 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
   void reload() => _load();
 
   Future<void> _load() async {
-    final hasData = _safeBrowsing != null;
-    if (!hasData) {
+    if (!_loaded) {
       setState(() {
         _loading = true;
         _error = null;
       });
     }
     try {
+      final ds = dataSource!;
       final results = await Future.wait([
-        adGuardHome!.protectionEnabled(),
-        adGuardHome!.safeBrowsing.enabled(),
-        adGuardHome!.parental.enabled(),
-        adGuardHome!.safeSearch.enabled(),
+        ds.protectionEnabled(),
+        ds.safeBrowsingEnabled(),
+        ds.parentalEnabled(),
+        ds.safeSearchEnabled(),
       ]);
       if (!mounted) return;
       protectionStatus.value = results[0];
@@ -351,33 +381,30 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
         _parental = results[2];
         _safeSearch = results[3];
         _loading = false;
+        _loaded = true;
         _error = null;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        if (!hasData) _error = e.toString();
+        if (!_loaded) _error = e.toString();
       });
     }
   }
 
   Future<void> _toggleProtection() async {
     final current = protectionStatus.value;
-    if (current == null) return;
-    final next = !current;
-    protectionStatus.value = next;
+    if (!current.isReady) return;
+    final next = !current.isOn;
+    protectionStatus.value = next ? ToggleState.on : ToggleState.off;
     try {
-      if (next) {
-        await adGuardHome!.enableProtection();
-      } else {
-        await adGuardHome!.disableProtection();
-      }
+      await dataSource!.setProtection(next);
     } catch (e) {
       protectionStatus.value = current;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Failed to update Protection'),
           behavior: SnackBarBehavior.floating,
         ),
@@ -387,12 +414,13 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
 
   Future<void> _toggle({
     required String label,
-    required bool current,
+    required ToggleState current,
     required Future<void> Function(bool) apply,
-    required void Function(bool) commit,
+    required void Function(ToggleState) commit,
   }) async {
-    final next = !current;
-    commit(next);
+    if (!current.isReady) return;
+    final next = !current.isOn;
+    commit(next ? ToggleState.on : ToggleState.off);
     try {
       await apply(next);
     } catch (e) {
@@ -429,45 +457,45 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
                   )
                 : Column(
                     children: [
-                      ValueListenableBuilder<bool?>(
+                      ValueListenableBuilder<ToggleState>(
                         valueListenable: protectionStatus,
                         builder: (context, value, _) => _CompactToggle(
                           label: 'Protection',
                           icon: Icons.shield,
-                          value: value ?? false,
+                          state: value,
                           onChanged: _toggleProtection,
                         ),
                       ),
                       _CompactToggle(
                         label: 'Safe Browsing',
                         icon: Icons.coronavirus,
-                        value: _safeBrowsing!,
+                        state: _safeBrowsing,
                         onChanged: () => _toggle(
                           label: 'Safe Browsing',
-                          current: _safeBrowsing!,
-                          apply: (next) => next ? adGuardHome!.safeBrowsing.enable() : adGuardHome!.safeBrowsing.disable(),
+                          current: _safeBrowsing,
+                          apply: dataSource!.setSafeBrowsing,
                           commit: (val) => setState(() => _safeBrowsing = val),
                         ),
                       ),
                       _CompactToggle(
                         label: 'Parental Control',
                         icon: Icons.person,
-                        value: _parental!,
+                        state: _parental,
                         onChanged: () => _toggle(
                           label: 'Parental Control',
-                          current: _parental!,
-                          apply: (next) => next ? adGuardHome!.parental.enable() : adGuardHome!.parental.disable(),
+                          current: _parental,
+                          apply: dataSource!.setParental,
                           commit: (val) => setState(() => _parental = val),
                         ),
                       ),
                       _CompactToggle(
                         label: 'Safe Search',
                         icon: Icons.search,
-                        value: _safeSearch!,
+                        state: _safeSearch,
                         onChanged: () => _toggle(
                           label: 'Safe Search',
-                          current: _safeSearch!,
-                          apply: (next) => adGuardHome!.safeSearch.setEnabled(next),
+                          current: _safeSearch,
+                          apply: dataSource!.setSafeSearch,
                           commit: (val) => setState(() => _safeSearch = val),
                         ),
                       ),
@@ -481,32 +509,48 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
 class _CompactToggle extends StatelessWidget {
   final String label;
   final IconData icon;
-  final bool value;
+  final ToggleState state;
   final VoidCallback onChanged;
 
   const _CompactToggle({
     required this.label,
     required this.icon,
-    required this.value,
+    required this.state,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final disabled = !state.isReady;
+    final mixed = state.isMixed;
+    final scheme = Theme.of(context).colorScheme;
     return InkWell(
-      onTap: onChanged,
+      onTap: disabled ? null : onChanged,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Row(
           children: [
-            Icon(icon, size: 20),
+            Icon(icon, size: 20, color: disabled ? scheme.onSurface.withValues(alpha: 0.5) : null),
             const SizedBox(width: 12),
-            Expanded(child: Text(label)),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(color: disabled ? scheme.onSurface.withValues(alpha: 0.5) : null),
+              ),
+            ),
+            if (mixed)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  'Mixed',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurface.withValues(alpha: 0.6)),
+                ),
+              ),
             Transform.scale(
               scale: 0.8,
               child: Switch(
-                value: value,
-                onChanged: (_) => onChanged(),
+                value: state.isOn,
+                onChanged: disabled ? null : (_) => onChanged(),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
@@ -581,8 +625,8 @@ class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
   @override
   void initState() {
     super.initState();
-    if (instanceConfigured && protectionStatus.value == null) {
-      adGuardHome!.protectionEnabled().then((v) {
+    if (instanceConfigured && protectionStatus.value.isLoading) {
+      dataSource!.protectionEnabled().then((v) {
         if (mounted) protectionStatus.value = v;
       }).catchError((_) {});
     }
@@ -590,15 +634,11 @@ class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
 
   Future<void> _toggle() async {
     final current = protectionStatus.value;
-    if (current == null) return;
-    final next = !current;
-    protectionStatus.value = next;
+    if (!current.isReady) return;
+    final next = !current.isOn;
+    protectionStatus.value = next ? ToggleState.on : ToggleState.off;
     try {
-      if (next) {
-        await adGuardHome!.enableProtection();
-      } else {
-        await adGuardHome!.disableProtection();
-      }
+      await dataSource!.setProtection(next);
     } catch (e) {
       protectionStatus.value = current;
       if (!mounted) return;
@@ -615,10 +655,10 @@ class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: ValueListenableBuilder<bool?>(
+      child: ValueListenableBuilder<ToggleState>(
         valueListenable: protectionStatus,
         builder: (context, value, _) {
-          if (value == null) {
+          if (value.isLoading) {
             return IconButton.filledTonal(
               icon: const SizedBox(
                 height: 16,
@@ -628,13 +668,21 @@ class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
               onPressed: null,
             );
           }
+          if (value.isMixed) {
+            return IconButton.filledTonal(
+              icon: const Icon(Icons.shield_moon_outlined),
+              tooltip: 'Protection differs across instances',
+              onPressed: null,
+            );
+          }
+          final on = value.isOn;
           return IconButton.filled(
             style: IconButton.styleFrom(
-              backgroundColor: value ? Colors.red : Colors.green[700],
+              backgroundColor: on ? Colors.red : Colors.green[700],
               foregroundColor: Colors.white,
             ),
-            icon: Icon(value ? Icons.shield_outlined : Icons.shield),
-            tooltip: value ? 'Disable protection' : 'Enable protection',
+            icon: Icon(on ? Icons.shield_outlined : Icons.shield),
+            tooltip: on ? 'Disable protection' : 'Enable protection',
             onPressed: _toggle,
           );
         },

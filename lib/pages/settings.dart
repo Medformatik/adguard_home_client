@@ -1,4 +1,5 @@
 import 'package:adguard_home_client/main.dart';
+import 'package:adguard_home_client/utils/datasource.dart';
 import 'package:adguard_home_client/utils/init.dart';
 import 'package:adguard_home_client/utils/instances.dart';
 import 'package:flutter/material.dart';
@@ -34,12 +35,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final ok = await initAdGuardHome(switchTo: id);
     if (!mounted) return;
     if (ok) {
-      activeInstanceName.value = Instances.get(id)?.name;
-      protectionStatus.value = null;
+      activeInstanceName.value = activeLabelFor(id);
+      protectionStatus.value = ToggleState.loading;
       Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
     } else {
       Fluttertoast.showToast(
-        msg: 'Could not connect to "${Instances.get(id)?.name ?? "instance"}". Check its settings.',
+        msg: 'Could not connect to "${activeLabelFor(id) ?? "instance"}". Check its settings.',
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
@@ -53,10 +54,10 @@ class _SettingsPageState extends State<SettingsPage> {
     ));
     if (!mounted) return;
     setState(_refreshFromStorage);
-    if (instance.id == _activeId) {
-      // Active instance was edited — reconnect with the latest values.
+    if (instance.id == _activeId || _activeId == Instances.unifiedId) {
+      // Active (or unified) view depends on this instance — reconnect.
       await initAdGuardHome();
-      if (mounted) activeInstanceName.value = Instances.get(instance.id)?.name;
+      if (mounted) activeInstanceName.value = activeLabelFor(_activeId);
     }
   }
 
@@ -92,11 +93,40 @@ class _SettingsPageState extends State<SettingsPage> {
     final newActive = Instances.getActiveId();
     if (newActive != null) {
       await initAdGuardHome();
-      if (mounted) activeInstanceName.value = Instances.get(newActive)?.name;
+      if (mounted) activeInstanceName.value = activeLabelFor(newActive);
     } else {
       adGuardHome = null;
+      dataSource = null;
       activeInstanceName.value = null;
     }
+  }
+
+  Widget _instanceTile(Instance instance) {
+    final isActive = instance.id == _activeId;
+    return ListTile(
+      leading: Icon(
+        isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+        color: isActive ? Theme.of(context).colorScheme.primary : null,
+      ),
+      title: Text(instance.name.isEmpty ? '(unnamed)' : instance.name),
+      subtitle: Text('${instance.tls ? 'https' : 'http'}://${instance.host}:${instance.port}'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: 'Edit',
+            onPressed: () => _editInstance(instance),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Delete',
+            onPressed: () => _confirmDelete(instance),
+          ),
+        ],
+      ),
+      onTap: isActive ? null : () => _switchTo(instance.id),
+    );
   }
 
   @override
@@ -119,37 +149,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               )
-            : ListView.separated(
-                itemCount: _instances.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final instance = _instances[i];
-                  final isActive = instance.id == _activeId;
-                  return ListTile(
-                    leading: Icon(
-                      isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                      color: isActive ? Theme.of(context).colorScheme.primary : null,
+            : ListView(
+                children: [
+                  if (_instances.length >= 2) ...[
+                    _UnifiedTile(
+                      isActive: _activeId == Instances.unifiedId,
+                      onTap: _activeId == Instances.unifiedId ? null : () => _switchTo(Instances.unifiedId),
                     ),
-                    title: Text(instance.name.isEmpty ? '(unnamed)' : instance.name),
-                    subtitle: Text('${instance.tls ? 'https' : 'http'}://${instance.host}:${instance.port}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          tooltip: 'Edit',
-                          onPressed: () => _editInstance(instance),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Delete',
-                          onPressed: () => _confirmDelete(instance),
-                        ),
-                      ],
-                    ),
-                    onTap: isActive ? null : () => _switchTo(instance.id),
-                  );
-                },
+                    const Divider(height: 1),
+                  ],
+                  for (int i = 0; i < _instances.length; i++) ...[
+                    _instanceTile(_instances[i]),
+                    if (i != _instances.length - 1) const Divider(height: 1),
+                  ],
+                ],
               ),
       ),
     );
@@ -340,6 +353,26 @@ class _InstanceEditPageState extends State<InstanceEditPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _UnifiedTile extends StatelessWidget {
+  final bool isActive;
+  final VoidCallback? onTap;
+  const _UnifiedTile({required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Icon(
+        isActive ? Icons.radio_button_checked : Icons.merge_type,
+        color: isActive ? scheme.primary : null,
+      ),
+      title: const Text('Unified'),
+      subtitle: const Text('Aggregated stats and controls across all instances'),
+      onTap: onTap,
     );
   }
 }

@@ -32,7 +32,7 @@ class _QueryLogPageState extends State<QueryLogPage> {
 
   void _load() {
     setState(() {
-      _entries = adGuardHome!.queryLog.recent(limit: 100, search: _search);
+      _entries = dataSource!.queryLog(limit: 100, search: _search);
     });
   }
 
@@ -167,7 +167,12 @@ class _QueryLogTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        '${entry.client} • ${entry.questionType} • ${entry.elapsedMs} ms',
+        [
+          if (entry.source != null) entry.source!,
+          entry.client,
+          entry.questionType,
+          '${entry.elapsedMs} ms',
+        ].join(' • '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -207,6 +212,7 @@ class _QueryLogTile extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
                 const Divider(height: 24),
+                if (entry.source != null) _row('Instance', entry.source!),
                 _row('Client', entry.client),
                 _row('Reason', _humanReason(entry.reason)),
                 _row('Elapsed', '${entry.elapsedMs} ms'),

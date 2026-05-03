@@ -10,6 +10,10 @@ class QueryLogEntry {
   final String? rule;
   final List<String> answers;
 
+  /// Set by [UnifiedDataSource] to identify the originating instance.
+  /// Null for single-instance views.
+  String? source;
+
   QueryLogEntry({
     required this.time,
     required this.client,
@@ -19,6 +23,7 @@ class QueryLogEntry {
     required this.elapsedMs,
     required this.rule,
     required this.answers,
+    this.source,
   });
 
   bool get blocked => reason.startsWith('Filtered');

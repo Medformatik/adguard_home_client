@@ -51,6 +51,9 @@ class Instance {
 }
 
 class Instances {
+  /// Sentinel id meaning "all configured instances merged".
+  static const String unifiedId = '__unified__';
+
   static Box get _box => Hive.box(_instancesBoxName);
   static Box get _settings => Hive.box(_settingsBoxName);
 
