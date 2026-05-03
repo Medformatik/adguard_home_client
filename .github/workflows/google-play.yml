@@ -123,7 +123,7 @@ jobs:
       - name: Build release AAB
         run: flutter build appbundle --release
 
-      - name: Upload AAB to Google Play production with release notes
+      - name: Upload AAB to Google Play production draft with release notes
         if: steps.release-notes.outputs.has_release_notes == 'true'
         uses: r0adkll/upload-google-play@v1.1.5
         with:
@@ -131,12 +131,11 @@ jobs:
           packageName: de.medformatik.adguard_home_client
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           tracks: production
-          status: completed
-          changesNotSentForReview: true
+          status: draft
           whatsNewDirectory: distribution/whatsnew
           releaseName: ${{ github.event.release.tag_name }}
 
-      - name: Upload AAB to Google Play production without release notes
+      - name: Upload AAB to Google Play production draft without release notes
         if: steps.release-notes.outputs.has_release_notes != 'true'
         uses: r0adkll/upload-google-play@v1.1.5
         with:
@@ -144,6 +143,5 @@ jobs:
           packageName: de.medformatik.adguard_home_client
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           tracks: production
-          status: completed
-          changesNotSentForReview: true
+          status: draft
           releaseName: ${{ github.event.release.tag_name }}
