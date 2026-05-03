@@ -33,7 +33,7 @@
 
 - **Google Play:** [play.google.com/store/apps/details?id=de.medformatik.adguard_home_client](https://play.google.com/store/apps/details?id=de.medformatik.adguard_home_client)
 - **APK from GitHub:** every tagged release ships a signed `app-release.apk`. Grab it from the [latest release](https://github.com/Medformatik/adguard_home_client/releases/latest).
-- **[Obtainium](https://github.com/ImranR98/Obtainium):** tap the badge above, or paste this into Obtainium's "Add App" → "Import URL" field:
+- **[Obtainium](https://github.com/ImranR98/Obtainium):** tap the badge above, or paste this into Obtainium's "Add App" → "App source URL" field:
   ```
   https://github.com/Medformatik/adguard_home_client
   ```
