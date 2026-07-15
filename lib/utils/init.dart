@@ -34,20 +34,26 @@ Future<bool> initAdGuardHome({String? switchTo}) async {
     final names = <String>[];
     for (final instance in instances) {
       final password = await Instances.getPassword(instance.id) ?? '';
-      clients.add(AdGuardHome(
-        host: instance.host,
-        port: instance.port,
-        tls: instance.tls,
-        verifySsl: instance.verifySsl,
-        username: instance.username,
-        password: password,
-      ));
+      clients.add(
+        AdGuardHome(
+          host: instance.host,
+          port: instance.port,
+          tls: instance.tls,
+          verifySsl: instance.verifySsl,
+          username: instance.username,
+          password: password,
+        ),
+      );
       names.add(instance.name);
     }
     adGuardHome = clients.first; // legacy callers; not load-bearing
     dataSource = UnifiedDataSource(clients, names);
-    debugPrint('Initialized unified DataSource over ${clients.length} instance(s)');
-    final results = await Future.wait(clients.map((c) => c.successfullyConnected()));
+    debugPrint(
+      'Initialized unified DataSource over ${clients.length} instance(s)',
+    );
+    final results = await Future.wait(
+      clients.map((c) => c.successfullyConnected()),
+    );
     return results.any((ok) => ok);
   }
 

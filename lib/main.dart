@@ -3,6 +3,7 @@ import 'package:adguard_home_client/interface/adguardhome.dart';
 import 'package:adguard_home_client/utils/datasource.dart';
 import 'package:adguard_home_client/utils/init.dart';
 import 'package:adguard_home_client/utils/instances.dart';
+import 'package:adguard_home_client/utils/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 
@@ -13,7 +14,9 @@ AdGuardHome? adGuardHome;
 DataSource? dataSource;
 
 /// Shared protection state — both the AppBar toggle and the protections card listen to it.
-final ValueNotifier<ToggleState> protectionStatus = ValueNotifier(ToggleState.loading);
+final ValueNotifier<ToggleState> protectionStatus = ValueNotifier(
+  ToggleState.loading,
+);
 
 /// Active instance label, surfaced in the home AppBar. Updated by initAdGuardHome
 /// callers and the instance switcher.
@@ -29,9 +32,12 @@ String? activeLabelFor(String? id) {
 }
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('settings');
   await Hive.openBox('instances');
+
+  loadThemeMode();
 
   await Instances.migrateLegacy();
 

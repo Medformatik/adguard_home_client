@@ -2,12 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:adguard_home_client/interface/blocked_services.dart';
 import 'package:adguard_home_client/interface/filtering.dart';
 import 'package:adguard_home_client/interface/parental.dart';
 import 'package:adguard_home_client/interface/querylog.dart';
 import 'package:adguard_home_client/interface/safebrowsing.dart';
 import 'package:adguard_home_client/interface/safesearch.dart';
 import 'package:adguard_home_client/interface/stats.dart';
+import 'package:adguard_home_client/interface/rewrite.dart';
+import 'package:adguard_home_client/interface/clients.dart';
+import 'package:adguard_home_client/interface/dns.dart';
+import 'package:adguard_home_client/generated_api/export.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
@@ -29,15 +34,33 @@ class AdGuardHome {
   late AdGuardHomeSafeBrowsing safeBrowsing;
   late AdGuardHomeSafeSearch safeSearch;
   late AdGuardHomeStats stats;
+  late AdGuardHomeBlockedServices blockedServices;
+  late AdGuardHomeRewrite rewrite;
+  late AdGuardHomeClients clientsHandler;
+  late AdGuardHomeDns dns;
+  late final RestClient restClient;
 
   Dio? _session;
   bool _closeSession = false;
 
-  bool get isDemo => host == 'demo.demo.demo' && port == 3000 && username == 'demo' && password == 'demo';
-  bool _demoProtectionEnabled = true;
-  bool _demoSafeBrowsing = true;
-  bool _demoParental = false;
-  bool _demoSafeSearch = true;
+  bool get isDemo =>
+      host == 'demo.demo.demo' &&
+      port == 3000 &&
+      username == 'demo' &&
+      password == 'demo';
+  bool demoProtectionEnabled = true;
+  DateTime? demoProtectionPausedUntil;
+  bool demoSafeBrowsing = true;
+  bool demoParental = false;
+  bool demoSafeSearch = true;
+  List<String> demoUserRules = [
+    '||doubleclick.net^',
+    '||malware.example.org^',
+    '||adult.example.com^',
+    '@@||allowlist.example.com^',
+  ];
+  List<String> demoBlockedServiceIds = ['tiktok', 'instagram'];
+  Schedule demoBlockedServicesSchedule = const Schedule(timeZone: 'Local');
 
   AdGuardHome({
     required this.host,
@@ -50,24 +73,40 @@ class AdGuardHome {
     this.username,
     this.verifySsl = true,
   }) {
-    // Initialize connection with AdGuard Home.
-
-    // Class constructor for setting up an AdGuard Home object to
-    // communicate with an AdGuard Home instance.
-
-    /* 
-    Args:
-      host: Hostname or IP address of the AdGuard Home instance.
-      basePath: Base path of the API, usually `/control`, which is the default.
-      password: Password for HTTP auth, if enabled.
-      port: Port on which the API runs, usually 3000.
-      requestTimeout: Max timeout to wait for a response from the API.
-      session: Optional, shared, aiohttp client session.
-      tls: True, when TLS/SSL should be used.
-      userAgent: Defaults to PythonAdGuardHome/<version>.
-      username: Username for HTTP auth, if enabled.
-      verifySsl: Can be set to false, when TLS with self-signed cert is used.
-    */
+    if (!isDemo) {
+      final scheme = tls ? 'https' : 'http';
+      final baseUrl = '$scheme://$host:$port$basePath';
+      final headers = <String, String>{
+        'Accept': 'application/json, text/plain, */*',
+      };
+      if (userAgent != null) {
+        headers['User-Agent'] = userAgent!;
+      }
+      if (username != null && password != null) {
+        headers['authorization'] =
+            'Basic ${base64Encode(utf8.encode('$username:$password'))}';
+      }
+      _session = Dio(
+        BaseOptions(
+          baseUrl: baseUrl,
+          connectTimeout: Duration(milliseconds: requestTimeout),
+          receiveTimeout: Duration(milliseconds: requestTimeout),
+          headers: headers,
+        ),
+      );
+      if (tls && !verifySsl) {
+        (_session!.httpClientAdapter as IOHttpClientAdapter).createHttpClient =
+            () {
+              final client = HttpClient();
+              client.badCertificateCallback = (cert, host, port) => true;
+              return client;
+            };
+      }
+      restClient = RestClient(_session!);
+      _closeSession = true;
+    } else {
+      restClient = RestClient(Dio());
+    }
 
     filtering = AdGuardHomeFiltering(this);
     parental = AdGuardHomeParental(this);
@@ -75,6 +114,10 @@ class AdGuardHome {
     safeBrowsing = AdGuardHomeSafeBrowsing(this);
     safeSearch = AdGuardHomeSafeSearch(this);
     stats = AdGuardHomeStats(this);
+    blockedServices = AdGuardHomeBlockedServices(this);
+    rewrite = AdGuardHomeRewrite(this);
+    clientsHandler = AdGuardHomeClients(this);
+    dns = AdGuardHomeDns(this);
   }
 
   Future<Map<String, dynamic>> request(
@@ -129,22 +172,10 @@ class AdGuardHome {
     }
 
     if (_session == null) {
-      _session = Dio(
-        BaseOptions(
-          connectTimeout: Duration(milliseconds: requestTimeout),
-        ),
-      );
-      if (tls && !verifySsl) {
-        (_session!.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
-          final client = HttpClient();
-          client.badCertificateCallback = (cert, host, port) => true;
-          return client;
-        };
-      }
-      _closeSession = true;
+      return {'error': 'Session not initialized'};
     }
 
-    Response? response;
+    late final Response response;
 
     try {
       response = await _session!.fetch(
@@ -163,10 +194,7 @@ class AdGuardHome {
       } else {
         debugPrint('AdGuardHome request error: ${e.message}');
       }
-    }
-
-    if (response == null) {
-      return {'error': 'No response'};
+      rethrow;
     }
 
     String? contentType = response.headers.value('Content-Type');
@@ -178,36 +206,76 @@ class AdGuardHome {
     }
 
     if (contentType != null && contentType.contains('application/json')) {
-      return response.data;
+      var data = response.data;
+      if (data is String) {
+        try {
+          data = jsonDecode(data);
+        } catch (_) {
+          // Keep it as a raw string if parsing fails
+        }
+      }
+      if (data is List) {
+        return {'services': data, 'data': data};
+      }
+      if (data is Map<String, dynamic>) {
+        return data;
+      }
+      if (data is Map) {
+        return Map<String, dynamic>.from(data);
+      }
+      return {'data': data};
     }
 
-    String text = response.data;
+    final text = response.data.toString();
     return {'message': text};
   }
 
   // Return if AdGuard Home protection is enabled or not.
   Future<bool> protectionEnabled() async {
-    if (isDemo) return _demoProtectionEnabled;
-    Map<String, dynamic> response = await request('status');
-    return response['protection_enabled'] ?? false;
+    return (await protectionInfo()).enabled;
+  }
+
+  Future<ProtectionInfo> protectionInfo() async {
+    if (isDemo) {
+      final pauseUntil = demoProtectionPausedUntil;
+      if (pauseUntil != null && !pauseUntil.isAfter(DateTime.now())) {
+        demoProtectionPausedUntil = null;
+        demoProtectionEnabled = true;
+      }
+      return ProtectionInfo(
+        enabled: demoProtectionEnabled,
+        remaining: demoProtectionPausedUntil?.difference(DateTime.now()),
+      );
+    }
+    final response = await restClient.global.status();
+    final duration = response.protectionDisabledDuration;
+    return ProtectionInfo(
+      enabled: response.protectionEnabled,
+      remaining: duration != null && duration > 0
+          ? Duration(milliseconds: duration)
+          : null,
+    );
+  }
+
+  Future<void> setProtection(bool enabled, {Duration? pauseFor}) async {
+    if (isDemo) {
+      demoProtectionEnabled = enabled;
+      demoProtectionPausedUntil = !enabled && pauseFor != null
+          ? DateTime.now().add(pauseFor)
+          : null;
+      return;
+    }
+    await restClient.global.setProtection(
+      body: SetProtectionRequest(
+        enabled: enabled,
+        duration: enabled ? null : pauseFor?.inMilliseconds,
+      ),
+    );
   }
 
   Future<void> enableProtection() async {
-    /*
-    Enable AdGuard Home protection.
-    Raises:
-      AdGuardHomeError: Failed enabling AdGuard Home protection.
-    */
-    if (isDemo) {
-      _demoProtectionEnabled = true;
-      return;
-    }
     try {
-      await request(
-        'dns_config',
-        method: 'POST',
-        data: {'protection_enabled': true},
-      );
+      await setProtection(true);
     } catch (e) {
       debugPrint('AdGuardHomeError: Failed enabling AdGuard Home protection.');
       rethrow;
@@ -215,21 +283,8 @@ class AdGuardHome {
   }
 
   Future<void> disableProtection() async {
-    /*
-    Disable AdGuard Home protection.
-    Raises:
-      AdGuardHomeError: Failed disabling AdGuard Home protection.
-    */
-    if (isDemo) {
-      _demoProtectionEnabled = false;
-      return;
-    }
     try {
-      await request(
-        'dns_config',
-        method: 'POST',
-        data: {'protection_enabled': false},
-      );
+      await setProtection(false);
     } catch (e) {
       debugPrint('AdGuardHomeError: Failed disabling AdGuard Home protection.');
       rethrow;
@@ -239,15 +294,23 @@ class AdGuardHome {
   // Return the current version of the AdGuard Home instance.
   Future<String> version() async {
     if (isDemo) return 'Version: Demo';
-    Map<String, dynamic> response = await request('status');
-    return response['version'] ?? 'Version unknown';
+    try {
+      final response = await restClient.global.status();
+      return response.version;
+    } catch (_) {
+      return 'Version unknown';
+    }
   }
 
   // Returns if the AdGuard Home instance is connected or not
   Future<bool> successfullyConnected() async {
     if (isDemo) return true;
-    Map<String, dynamic>? response = await request('status');
-    return !(response.containsKey('error') && response['error'] == 'No response');
+    try {
+      await restClient.global.status();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> close() async {
@@ -256,35 +319,46 @@ class AdGuardHome {
     }
   }
 
-  Map<String, dynamic> _demoResponse(String uri, dynamic data, Map<String, String>? params) {
+  Map<String, dynamic> _demoResponse(
+    String uri,
+    dynamic data,
+    Map<String, String>? params,
+  ) {
     switch (uri) {
       case 'status':
-        return {'protection_enabled': _demoProtectionEnabled, 'version': 'Demo'};
+        return {'protection_enabled': demoProtectionEnabled, 'version': 'Demo'};
       case 'stats':
         return _demoStatsPayload;
       case 'stats_info':
         return {'interval': 90};
       case 'safebrowsing/status':
-        return {'enabled': _demoSafeBrowsing};
+        return {'enabled': demoSafeBrowsing};
       case 'safebrowsing/enable':
-        _demoSafeBrowsing = true;
+        demoSafeBrowsing = true;
         return {};
       case 'safebrowsing/disable':
-        _demoSafeBrowsing = false;
+        demoSafeBrowsing = false;
         return {};
       case 'parental/status':
-        return {'enabled': _demoParental};
+        return {'enabled': demoParental};
       case 'parental/enable':
-        _demoParental = true;
+        demoParental = true;
         return {};
       case 'parental/disable':
-        _demoParental = false;
+        demoParental = false;
         return {};
       case 'safesearch/status':
-        return {'enabled': _demoSafeSearch, 'bing': true, 'duckduckgo': true, 'google': true, 'yandex': true, 'youtube': true};
+        return {
+          'enabled': demoSafeSearch,
+          'bing': true,
+          'duckduckgo': true,
+          'google': true,
+          'yandex': true,
+          'youtube': true,
+        };
       case 'safesearch/settings':
         if (data is Map && data['enabled'] is bool) {
-          _demoSafeSearch = data['enabled'] as bool;
+          demoSafeSearch = data['enabled'] as bool;
         }
         return {};
       case 'querylog':
@@ -293,8 +367,13 @@ class AdGuardHome {
         return {
           'data': [
             for (final entry in _demoQueryLog)
-              if ((entry['question']?['name'] ?? '').toString().toLowerCase().contains(search) ||
-                  (entry['client'] ?? '').toString().toLowerCase().contains(search))
+              if ((entry['question']?['name'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .contains(search) ||
+                  (entry['client'] ?? '').toString().toLowerCase().contains(
+                    search,
+                  ))
                 entry,
           ],
         };
@@ -304,15 +383,20 @@ class AdGuardHome {
 
   static final Map<String, dynamic> _demoStatsPayload = (() {
     final rng = Random(42);
-    List<int> series(int base, int variance) =>
-        List<int>.generate(90, (i) => (base + rng.nextInt(variance) - variance ~/ 2).clamp(0, 1 << 31));
+    List<int> series(int base, int variance) => List<int>.generate(
+      90,
+      (i) => (base + rng.nextInt(variance) - variance ~/ 2).clamp(0, 1 << 31),
+    );
     final dnsQueries = series(1500, 800);
     final blockedFiltering = series(380, 200);
     final replacedSafebrowsing = series(8, 16);
     final replacedParental = series(2, 6);
     final totalQueries = dnsQueries.fold<int>(0, (a, b) => a + b);
     final totalBlocked = blockedFiltering.fold<int>(0, (a, b) => a + b);
-    final totalSafebrowsing = replacedSafebrowsing.fold<int>(0, (a, b) => a + b);
+    final totalSafebrowsing = replacedSafebrowsing.fold<int>(
+      0,
+      (a, b) => a + b,
+    );
     final totalParental = replacedParental.fold<int>(0, (a, b) => a + b);
     return {
       'num_dns_queries': totalQueries,
@@ -341,6 +425,16 @@ class AdGuardHome {
         {'192.168.1.5': 7321},
         {'192.168.1.78': 4128},
       ],
+      'top_upstreams_responses': const [
+        {'tls://1.1.1.1': 72104},
+        {'https://dns.google/dns-query': 45892},
+        {'9.9.9.9': 10924},
+      ],
+      'top_upstreams_avg_time': const [
+        {'tls://1.1.1.1': 0.0118},
+        {'https://dns.google/dns-query': 0.0186},
+        {'9.9.9.9': 0.0251},
+      ],
       'dns_queries': dnsQueries,
       'blocked_filtering': blockedFiltering,
       'replaced_safebrowsing': replacedSafebrowsing,
@@ -351,18 +445,70 @@ class AdGuardHome {
   static final List<Map<String, dynamic>> _demoQueryLog = (() {
     final now = DateTime.now().toUtc();
     final samples = <Map<String, dynamic>>[
-      {'name': 'play.googleapis.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
-      {'name': 'doubleclick.net', 'reason': 'FilteredBlackList', 'rule': '||doubleclick.net^', 'client': '192.168.1.42'},
-      {'name': 'github.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
-      {'name': 'malware.example.org', 'reason': 'FilteredSafeBrowsing', 'client': '192.168.1.5'},
-      {'name': 'ads.facebook.com', 'reason': 'FilteredBlackList', 'rule': '||facebook.com^', 'client': '192.168.1.78'},
-      {'name': 'youtube.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
-      {'name': 'adult.example.com', 'reason': 'FilteredParental', 'client': '192.168.1.78'},
-      {'name': 'cloudflare.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.42'},
-      {'name': 'analytics.google.com', 'reason': 'FilteredBlackList', 'rule': '||google-analytics.com^', 'client': '192.168.1.10'},
-      {'name': 'wikipedia.org', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.5'},
-      {'name': 'tracker.example.net', 'reason': 'FilteredBlackList', 'rule': '||tracker.example.net^', 'client': '192.168.1.42'},
-      {'name': 'apple.com', 'reason': 'NotFilteredNotFound', 'client': '192.168.1.10'},
+      {
+        'name': 'play.googleapis.com',
+        'reason': 'NotFilteredNotFound',
+        'client': '192.168.1.10',
+      },
+      {
+        'name': 'doubleclick.net',
+        'reason': 'FilteredBlackList',
+        'rule': '||doubleclick.net^',
+        'client': '192.168.1.42',
+      },
+      {
+        'name': 'github.com',
+        'reason': 'NotFilteredNotFound',
+        'client': '192.168.1.10',
+      },
+      {
+        'name': 'malware.example.org',
+        'reason': 'FilteredSafeBrowsing',
+        'client': '192.168.1.5',
+      },
+      {
+        'name': 'ads.facebook.com',
+        'reason': 'FilteredBlackList',
+        'rule': '||facebook.com^',
+        'client': '192.168.1.78',
+      },
+      {
+        'name': 'youtube.com',
+        'reason': 'NotFilteredNotFound',
+        'client': '192.168.1.10',
+      },
+      {
+        'name': 'adult.example.com',
+        'reason': 'FilteredParental',
+        'client': '192.168.1.78',
+      },
+      {
+        'name': 'cloudflare.com',
+        'reason': 'NotFilteredNotFound',
+        'client': '192.168.1.42',
+      },
+      {
+        'name': 'analytics.google.com',
+        'reason': 'FilteredBlackList',
+        'rule': '||google-analytics.com^',
+        'client': '192.168.1.10',
+      },
+      {
+        'name': 'wikipedia.org',
+        'reason': 'NotFilteredNotFound',
+        'client': '192.168.1.5',
+      },
+      {
+        'name': 'tracker.example.net',
+        'reason': 'FilteredBlackList',
+        'rule': '||tracker.example.net^',
+        'client': '192.168.1.42',
+      },
+      {
+        'name': 'apple.com',
+        'reason': 'NotFilteredNotFound',
+        'client': '192.168.1.10',
+      },
     ];
     return [
       for (int i = 0; i < samples.length; i++)
@@ -370,7 +516,11 @@ class AdGuardHome {
           'time': now.subtract(Duration(minutes: i * 4 + 1)).toIso8601String(),
           'question': {'name': samples[i]['name'], 'type': 'A', 'class': 'IN'},
           'answer': [
-            {'value': samples[i]['reason'].toString().startsWith('Filtered') ? '0.0.0.0' : '93.184.216.34'},
+            {
+              'value': samples[i]['reason'].toString().startsWith('Filtered')
+                  ? '0.0.0.0'
+                  : '93.184.216.34',
+            },
           ],
           'reason': samples[i]['reason'],
           'elapsedMs': (0.4 + i * 0.13).toStringAsFixed(4),
@@ -379,4 +529,11 @@ class AdGuardHome {
         },
     ];
   })();
+}
+
+class ProtectionInfo {
+  const ProtectionInfo({required this.enabled, this.remaining});
+
+  final bool enabled;
+  final Duration? remaining;
 }

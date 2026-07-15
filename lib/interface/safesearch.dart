@@ -1,20 +1,45 @@
 import 'package:adguard_home_client/interface/adguardhome.dart';
+import 'package:adguard_home_client/generated_api/models/safe_search_config.dart';
 
 class AdGuardHomeSafeSearch {
   final AdGuardHome _adGuardHome;
   AdGuardHomeSafeSearch(this._adGuardHome);
 
-  Future<Map<String, dynamic>> _settings() => _adGuardHome.request('safesearch/status');
+  Future<SafeSearchConfig> _settings() async {
+    if (_adGuardHome.isDemo) {
+      return SafeSearchConfig(
+        enabled: _adGuardHome.demoSafeSearch,
+        bing: true,
+        duckduckgo: true,
+        google: true,
+        yandex: true,
+        youtube: true,
+      );
+    }
+    return _adGuardHome.restClient.safesearch.safesearchStatus();
+  }
 
   Future<bool> enabled() async {
     final response = await _settings();
-    return response['enabled'] ?? false;
+    return response.enabled ?? false;
   }
 
   Future<void> setEnabled(bool value) async {
-    final current = Map<String, dynamic>.from(await _settings());
-    current['enabled'] = value;
-    current.remove('error');
-    await _adGuardHome.request('safesearch/settings', method: 'PUT', data: current);
+    if (_adGuardHome.isDemo) {
+      _adGuardHome.demoSafeSearch = value;
+      return;
+    }
+    final current = await _settings();
+    final updated = SafeSearchConfig(
+      enabled: value,
+      bing: current.bing,
+      duckduckgo: current.duckduckgo,
+      ecosia: current.ecosia,
+      google: current.google,
+      pixabay: current.pixabay,
+      yandex: current.yandex,
+      youtube: current.youtube,
+    );
+    await _adGuardHome.restClient.safesearch.safesearchSettings(body: updated);
   }
 }

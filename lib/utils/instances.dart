@@ -29,13 +29,13 @@ class Instance {
   });
 
   Map<String, dynamic> toMap() => {
-        'name': name,
-        'host': host,
-        'port': port,
-        'tls': tls,
-        'verifySsl': verifySsl,
-        'username': username,
-      };
+    'name': name,
+    'host': host,
+    'port': port,
+    'tls': tls,
+    'verifySsl': verifySsl,
+    'username': username,
+  };
 
   factory Instance.fromMap(String id, Map data) {
     return Instance(
@@ -67,7 +67,11 @@ class Instances {
     final keys = _box.keys.cast<String>().toList()..sort();
     return [
       for (final key in keys)
-        if (_box.get(key) is Map) Instance.fromMap(key, Map<String, dynamic>.from(_box.get(key) as Map)),
+        if (_box.get(key) is Map)
+          Instance.fromMap(
+            key,
+            Map<String, dynamic>.from(_box.get(key) as Map),
+          ),
     ];
   }
 
@@ -101,8 +105,10 @@ class Instances {
   }
 
   static String _passwordKey(String id) => 'instance:$id:password';
-  static Future<String?> getPassword(String id) => _secure.read(key: _passwordKey(id));
-  static Future<void> setPassword(String id, String value) => _secure.write(key: _passwordKey(id), value: value);
+  static Future<String?> getPassword(String id) =>
+      _secure.read(key: _passwordKey(id));
+  static Future<void> setPassword(String id, String value) =>
+      _secure.write(key: _passwordKey(id), value: value);
 
   /// Migrate single-instance settings (host/port/username/password + tls/verifySsl
   /// stored under flat keys in `settings` + secure key `password`) into the new

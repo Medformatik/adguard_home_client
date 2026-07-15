@@ -1,157 +1,157 @@
 import 'package:adguard_home_client/widgets/statistics_card.dart';
 import 'package:flutter/material.dart';
 
-class StatisticsTableCard extends StatelessWidget {
+class StatisticsTableCard extends StatefulWidget {
   final String title;
   final Color textColor;
   final IconData? icon;
   final String keyColumn;
   final String valueColumn;
-  final Map<String, int> data;
-  final int? total;
+  final Map<String, num> data;
+  final num? total;
+  final String valueSuffix;
+  final int fractionDigits;
 
   const StatisticsTableCard({
     super.key,
     required this.title,
-    this.textColor = Colors.black,
+    required this.textColor,
     this.icon,
     required this.keyColumn,
     required this.valueColumn,
     required this.data,
     this.total,
+    this.valueSuffix = '',
+    this.fractionDigits = 0,
   });
 
-  List<DataColumn> _getColumns(BoxConstraints constraints) {
-    double columnWidth(double factor) => constraints.maxWidth * factor;
+  @override
+  State<StatisticsTableCard> createState() => _StatisticsTableCardState();
+}
 
-    final columns = <DataColumn>[
-      DataColumn(
-        label: SizedBox(
-          width: total != null ? columnWidth(0.6) : columnWidth(0.8),
-          child: Padding(
-            padding: const EdgeInsets.only(left: 16.0),
-            child: Text(keyColumn, overflow: TextOverflow.visible, softWrap: true),
-          ),
-        ),
-      ),
-      DataColumn(
-        label: SizedBox(
-          width: columnWidth(0.2),
-          child: Padding(
-            padding: total != null ? EdgeInsets.zero : const EdgeInsets.only(right: 16.0),
-            child: Text(valueColumn, overflow: TextOverflow.visible, softWrap: true),
-          ),
-        ),
-        numeric: true,
-      ),
-    ];
-    if (total != null) {
-      columns.add(
-        DataColumn(
-          label: SizedBox(
-            width: columnWidth(0.2),
-            child: const Padding(
-              padding: EdgeInsets.only(right: 16.0),
-              child: Text('', overflow: TextOverflow.visible, softWrap: true),
-            ),
-          ),
-          numeric: true,
-        ),
-      );
-    }
-    return columns;
+class _StatisticsTableCardState extends State<StatisticsTableCard> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final theme = Theme.of(context);
+    return Card.filled(
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                if (icon != null) Icon(icon, color: textColor),
-                const SizedBox(width: 8.0),
+                if (widget.icon != null)
+                  Icon(widget.icon, color: widget.textColor, size: 24),
+                const SizedBox(width: 12.0),
                 Expanded(
                   child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: textColor),
+                    widget.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12.0),
+            const SizedBox(height: 16.0),
             SizedBox(
               height: 200,
-              child: data.isEmpty
+              child: widget.data.isEmpty
                   ? Center(
                       child: Text(
                         'No data',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
                       ),
                     )
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: LayoutBuilder(
-                        builder: (BuildContext context, BoxConstraints constraints) {
-                          return DataTable(
-                            horizontalMargin: 0,
-                            columnSpacing: 0,
-                            headingRowHeight: 32,
-                            dataRowMinHeight: 28,
-                            dataRowMaxHeight: double.infinity,
-                            headingRowColor: WidgetStateProperty.all<Color>(textColor.withValues(alpha: 0.2)),
-                            columns: _getColumns(constraints),
-                            rows: data.entries.map<DataRow>((row) {
-                              final cells = <DataCell>[
-                                DataCell(
-                                  SizedBox(
-                                    width: constraints.maxWidth * (total != null ? 0.6 : 0.8),
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(left: 16.0),
-                                      child: Text(row.key, overflow: TextOverflow.visible, softWrap: true),
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  SizedBox(
-                                    width: constraints.maxWidth * 0.2,
-                                    child: Padding(
-                                      padding: total != null ? EdgeInsets.zero : const EdgeInsets.only(right: 16.0),
-                                      child: Text(
-                                        formatNumber(row.value),
-                                        overflow: TextOverflow.visible,
-                                        softWrap: true,
-                                        textAlign: TextAlign.end,
+                  : Scrollbar(
+                      controller: _scrollController,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.only(right: 12.0),
+                        child: Column(
+                          children: widget.data.entries.map((entry) {
+                            final ratio =
+                                (widget.total != null && widget.total! > 0
+                                        ? (entry.value / widget.total!)
+                                        : 0.0)
+                                    .clamp(0.0, 1.0);
+                            final percentage = (ratio * 100).toStringAsFixed(1);
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8.0,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: SelectableText(
+                                          entry.key,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                          maxLines: 1,
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              ];
-                              if (total != null) {
-                                final pct = total! > 0 ? (row.value / total! * 100).toStringAsFixed(1) : '0.0';
-                                cells.add(DataCell(
-                                  SizedBox(
-                                    width: constraints.maxWidth * 0.2,
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(right: 16.0),
-                                      child: Text(
-                                        '$pct %',
-                                        overflow: TextOverflow.visible,
-                                        softWrap: true,
-                                        textAlign: TextAlign.end,
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        '${widget.fractionDigits == 0 ? formatNumber(entry.value) : entry.value.toStringAsFixed(widget.fractionDigits)}${widget.valueSuffix}',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: widget.textColor,
+                                        ),
                                       ),
+                                      if (widget.total != null) ...[
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '$percentage%',
+                                          style: TextStyle(
+                                            color: theme.colorScheme.onSurface
+                                                .withValues(alpha: 0.6),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: ratio,
+                                      backgroundColor: widget.textColor
+                                          .withValues(alpha: 0.1),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        widget.textColor,
+                                      ),
+                                      minHeight: 5,
                                     ),
                                   ),
-                                ));
-                              }
-                              return DataRow(cells: cells);
-                            }).toList(),
-                          );
-                        },
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
                     ),
             ),

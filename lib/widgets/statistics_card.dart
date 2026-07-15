@@ -6,7 +6,6 @@ final NumberFormat _intFormat = NumberFormat.decimalPattern();
 final DateFormat _tooltipDateFormat = DateFormat('y-MM-dd');
 
 String formatNumber(num value) {
-  if (value is int) return _intFormat.format(value);
   return _intFormat.format(value);
 }
 
@@ -25,7 +24,7 @@ class StatisticsCard extends StatelessWidget {
     super.key,
     required this.primary,
     required this.title,
-    this.textColor = Colors.black,
+    required this.textColor,
     this.icon,
     this.primaryUnit,
     this.secondary,
@@ -38,17 +37,18 @@ class StatisticsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final hasGraph = graph != null && graph!.any((v) => v != 0);
-    final primaryText = _format(primary) + (primaryUnit != null ? ' ${primaryUnit!}' : '');
+
     final secondaryText = secondary == null
         ? null
         : '${secondaryPrefix != null ? '${secondaryPrefix!} ' : ''}'
-            '${_format(secondary!)}'
-            '${secondarySuffix != null ? ' ${secondarySuffix!}' : ''}';
+              '${_format(secondary!)}'
+              '${secondarySuffix != null ? ' ${secondarySuffix!}' : ''}';
 
-    return Card(
+    return Card.filled(
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,25 +56,47 @@ class StatisticsCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (icon != null) Icon(icon, color: textColor),
-                const SizedBox(width: 8.0),
+                if (icon != null) Icon(icon, color: textColor, size: 24),
+                const SizedBox(width: 12.0),
                 Expanded(
                   child: Text(
                     title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: textColor),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      primaryText,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: textColor, fontSize: 20.0),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: primary.toDouble()),
+                      duration: const Duration(milliseconds: 1200),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, _) {
+                        final formattedPrimary =
+                            _format(value.toInt()) +
+                            (primaryUnit != null ? ' ${primaryUnit!}' : '');
+                        return Text(
+                          formattedPrimary,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: textColor,
+                            fontSize: 22.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
                     ),
                     if (secondaryText != null)
                       Text(
                         secondaryText,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: textColor),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                   ],
                 ),
@@ -82,9 +104,9 @@ class StatisticsCard extends StatelessWidget {
             ),
             if (hasGraph)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12.0, 24.0, 12.0, 8.0),
+                padding: const EdgeInsets.fromLTRB(4.0, 24.0, 4.0, 4.0),
                 child: SizedBox(
-                  height: 200,
+                  height: 140,
                   child: LineChart(
                     LineChartData(
                       gridData: const FlGridData(show: false),
@@ -94,14 +116,25 @@ class StatisticsCard extends StatelessWidget {
                         touchTooltipData: LineTouchTooltipData(
                           fitInsideHorizontally: true,
                           fitInsideVertically: true,
-                          getTooltipColor: (LineBarSpot s) => textColor.withValues(alpha: 0.8),
+                          getTooltipColor: (LineBarSpot s) =>
+                              theme.colorScheme.inverseSurface,
                           getTooltipItems: (touchedSpots) {
-                            return touchedSpots.map<LineTooltipItem>((touchedSpot) {
+                            return touchedSpots.map<LineTooltipItem>((
+                              touchedSpot,
+                            ) {
                               final lastIndex = graph!.length - 1;
-                              final date = DateTime.now().subtract(Duration(days: lastIndex - touchedSpot.x.toInt()));
+                              final date = DateTime.now().subtract(
+                                Duration(
+                                  days: lastIndex - touchedSpot.x.toInt(),
+                                ),
+                              );
                               return LineTooltipItem(
-                                '${_tooltipDateFormat.format(date)}: ${_format(touchedSpot.y.toInt())}',
-                                const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                '${_tooltipDateFormat.format(date)}\n${_format(touchedSpot.y.toInt())}',
+                                TextStyle(
+                                  color: theme.colorScheme.onInverseSurface,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               );
                             }).toList();
                           },
@@ -110,16 +143,29 @@ class StatisticsCard extends StatelessWidget {
                       lineBarsData: [
                         LineChartBarData(
                           spots: [
-                            for (int i = 0; i < graph!.length; i++) FlSpot(i.toDouble(), graph![i].toDouble()),
+                            for (int i = 0; i < graph!.length; i++)
+                              FlSpot(i.toDouble(), graph![i].toDouble()),
                           ],
                           isCurved: true,
                           isStrokeCapRound: true,
-                          color: textColor,
-                          barWidth: 2,
+                          gradient: LinearGradient(
+                            colors: [
+                              textColor,
+                              textColor.withValues(alpha: 0.6),
+                            ],
+                          ),
+                          barWidth: 3.5,
                           dotData: const FlDotData(show: false),
                           belowBarData: BarAreaData(
                             show: true,
-                            color: textColor.withValues(alpha: 0.3),
+                            gradient: LinearGradient(
+                              colors: [
+                                textColor.withValues(alpha: 0.25),
+                                textColor.withValues(alpha: 0.0),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
                           ),
                         ),
                       ],

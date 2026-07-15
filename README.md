@@ -21,13 +21,21 @@
 
 ## Features
 
-- **Multi-instance support.** Configure as many AdGuard Home instances as you like and switch between them with a tap on the AppBar title.
-- **Unified view** that aggregates stats, top-N tables, and the query log across every instance. Toggles control all instances at once when they agree, and show "Mixed" (disabled) when they don't.
-- **Live statistics** for DNS queries, blocked traffic, malware/phishing, parental control, and Safe Search — with 90-day trend charts and Top queried domains, Top blocked domains, and Top clients tables.
-- **Query log** with searchable, time-stamped entries, blocked/allowed indicators, human-readable reasons, and a details sheet. In Unified mode each entry is tagged with its source instance.
-- **Protection toggles.** One-tap on/off for the master Protection, plus Safe Browsing, Parental Control, and Safe Search.
+- **Multi-instance support.** Configure multiple AdGuard Home servers, switch between them from the AppBar, and manage their connection and TLS settings independently.
+- **Unified view.** Aggregate statistics and query-log entries across every configured instance. Shared protection toggles apply to all instances and clearly indicate mixed states.
+- **Statistics dashboard.** Monitor DNS queries, filtering, Safe Browsing, parental controls, Safe Search, and upstream resolver response counts and latency through trend charts and top-N tables.
+- **Query log.** Search by domain or client, filter allowed, blocked, and rewritten requests, load older entries incrementally, and filter by source instance in Unified mode. Query details can be used to quickly block, unblock, or allow a domain.
+- **Protection controls.** Toggle master protection, Safe Browsing, parental controls, and Safe Search. Master protection can be paused for a chosen duration and resumed early.
+- **Filters and custom rules.** Enable and manage subscription blocklists and allowlists, refresh filter data, and edit custom filtering rules.
+- **Client management.** Add, edit, and delete persistent clients with per-device filtering, Safe Browsing, parental control, Safe Search, tags, and privacy settings.
+- **DNS rewrites.** Add, enable, disable, and remove custom domain rewrites.
+- **Blocked services.** Search and toggle supported services, then configure weekly periods during which selected services are temporarily allowed.
+- **Privacy and retention.** Configure query logging and statistics collection, retention periods, client-IP anonymization, and domain exclusions. Query logs and statistics can also be cleared independently.
+- **DNS diagnostics.** Inspect resolver and cache configuration, test every configured upstream DNS server, and clear the DNS cache.
 - **HTTPS / TLS** with an optional `Verify TLS certificate` toggle for self-signed certificates.
-- **Material 3 UI** with system-following dark mode, pull-to-refresh, and humanized numbers.
+- **Material 3 Expressive UI** with Material You dynamic colors, light/dark/system modes, pull-to-refresh, and humanized numbers.
+
+Server configuration screens operate on one AdGuard Home instance at a time. Select a specific instance before managing clients, filters, rewrites, blocked services, privacy settings, or DNS diagnostics. Unified mode is intended for aggregated monitoring and shared protection controls.
 
 ## Install
 
@@ -41,8 +49,14 @@
 ## Screenshots
 
 <p>
-  <img src="assets/images/play-store/screenshots/Google%20Pixel%204%20XL%20%281520x3040%29/Google%20Pixel%204%20XL%20Screenshot%200.png" height="400" alt="Home screen with stats" />
-  <img src="assets/images/play-store/screenshots/Google%20Pixel%204%20XL%20%281520x3040%29/Google%20Pixel%204%20XL%20Screenshot%201.png" height="400" alt="Top domains and clients" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/01.png" height="400" alt="Timed protection controls" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/02.png" height="400" alt="Searchable DNS query log" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/03.png" height="400" alt="Privacy and retention controls" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/04.png" height="400" alt="DNS diagnostics" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/05.png" height="400" alt="Blocked services and weekly schedule" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/06.png" height="400" alt="Upstream resolver performance" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/07.png" height="400" alt="Per-client protection settings" />
+  <img src="assets/images/play-store/screenshots/play-store-1520x3040/08.png" height="400" alt="Blocklists and DNS rewrites" />
 </p>
 
 ## Setup
@@ -50,10 +64,12 @@
 1. Open the app and tap **Add instance**.
 2. Enter the AdGuard Home host (IPv4, IPv6, or domain), port (default `3000`), username and password.
 3. Toggle **Use HTTPS** if your instance is reachable over TLS. For self-signed certificates, also disable **Verify TLS certificate**.
-4. Save. The home screen reconnects and starts streaming stats.
+4. Save. The app verifies the connection and loads the latest protection state and statistics.
 5. Add more instances any time and switch between them via the AppBar title — or pick **Unified** to aggregate them all.
 
 ## Build from source
+
+Requires Flutter 3.44 or newer with Dart 3.12 or newer.
 
 ```bash
 git clone https://github.com/Medformatik/adguard_home_client.git
@@ -68,7 +84,23 @@ Build a release APK with:
 flutter build apk --release
 ```
 
+Before submitting changes, format and validate the project with:
+
+```bash
+dart format lib test
+flutter analyze
+flutter test
+```
+
 For signed builds you'll need an `android/key.properties` pointing at your keystore (see [Flutter's signing guide](https://docs.flutter.dev/deployment/android#signing-the-app)). The repo's `android/.gitignore` excludes `key.properties` and `*.jks` so credentials never reach the repo.
+
+The generated API client under `lib/generated_api` is committed so a clean checkout can build without running code generation. After changing `assets/openapi.yaml` or `swagger_parser.yaml`, regenerate it with:
+
+```bash
+dart run swagger_parser
+dart run build_runner build
+dart format lib/generated_api
+```
 
 ## ⚠️ DISCLAIMER ⚠️
 

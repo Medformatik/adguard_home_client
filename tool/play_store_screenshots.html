@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AdGuard Home Client — Play Store screenshots</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 1520px; height: 3040px; margin: 0; overflow: hidden; }
+    body {
+      color: #f5fff9;
+      font-family: "SF Pro Display", "SF Pro Text", Inter, Arial, sans-serif;
+      background: #063f38;
+    }
+    .slide {
+      position: relative;
+      width: 1520px;
+      height: 3040px;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        linear-gradient(155deg, rgba(0, 58, 49, .96) 0%, rgba(0, 108, 91, .84) 44%, rgba(48, 75, 68, .92) 100%),
+        url("../assets/images/play-store/screenshots/2026/material-expressive-background.png") center / cover;
+    }
+    .slide::before, .slide::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      border-radius: 999px;
+      filter: blur(2px);
+    }
+    .slide::before {
+      width: 1050px;
+      height: 1050px;
+      right: -430px;
+      top: -370px;
+      background: rgba(148, 244, 220, .20);
+    }
+    .slide::after {
+      width: 900px;
+      height: 900px;
+      left: -460px;
+      bottom: -370px;
+      background: rgba(255, 216, 237, .13);
+    }
+    .brand {
+      position: absolute;
+      top: 94px;
+      left: 104px;
+      display: flex;
+      align-items: center;
+      gap: 30px;
+      font-size: 40px;
+      font-weight: 650;
+      letter-spacing: -.5px;
+    }
+    .brand img {
+      width: 74px;
+      height: 74px;
+      border-radius: 18px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .20);
+    }
+    .copy {
+      position: absolute;
+      z-index: 5;
+      top: 255px;
+      left: 104px;
+      width: 1312px;
+    }
+    h1 {
+      max-width: 1320px;
+      margin: 0;
+      font-size: 136px;
+      line-height: .99;
+      letter-spacing: -6.2px;
+      font-weight: 760;
+      text-wrap: balance;
+    }
+    .subtitle {
+      max-width: 1200px;
+      margin: 42px 0 0;
+      color: rgba(238, 255, 248, .84);
+      font-size: 46px;
+      line-height: 1.25;
+      letter-spacing: -.8px;
+      font-weight: 500;
+    }
+    .device {
+      position: absolute;
+      z-index: 2;
+      width: 1060px;
+      left: 230px;
+      top: 790px;
+      padding: 18px;
+      border-radius: 92px;
+      background: linear-gradient(150deg, #24302e 0%, #080d0c 46%, #1b2725 100%);
+      box-shadow: 0 76px 120px rgba(0, 20, 17, .46), 0 22px 40px rgba(0, 0, 0, .30);
+      transform: rotate(-1.2deg);
+    }
+    .screen {
+      overflow: hidden;
+      border-radius: 75px;
+      background: #fff8ff;
+    }
+    .status {
+      position: relative;
+      height: 100px;
+      color: #181218;
+      background: #fff8ff;
+      font-size: 35px;
+      font-weight: 700;
+    }
+    .status .time { position: absolute; left: 52px; top: 30px; }
+    .status .camera {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      left: calc(50% - 11px);
+      top: 34px;
+      border-radius: 50%;
+      background: #171717;
+    }
+    .status .icons { position: absolute; right: 48px; top: 27px; letter-spacing: 8px; }
+    .viewport { overflow: hidden; }
+    .capture {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-top: -101px;
+    }
+    .device.dual {
+      width: 680px;
+      padding: 13px;
+      border-radius: 66px;
+      box-shadow: 0 56px 92px rgba(0, 20, 17, .43), 0 16px 30px rgba(0, 0, 0, .28);
+    }
+    .device.dual .screen { border-radius: 54px; }
+    .device.dual .status { height: 66px; font-size: 23px; }
+    .device.dual .status .time { left: 34px; top: 19px; }
+    .device.dual .status .camera { width: 15px; height: 15px; left: calc(50% - 7px); top: 22px; }
+    .device.dual .status .icons { right: 30px; top: 17px; letter-spacing: 5px; }
+    .device.dual .capture { margin-top: -65px; }
+    .device.dual.first { left: 62px; top: 1050px; transform: rotate(-3.2deg); }
+    .device.dual.second { left: 778px; top: 1280px; transform: rotate(3.4deg); }
+    .slide.slide-6 .device {
+      width: 1020px;
+      left: 250px;
+      top: 860px;
+    }
+    .feature-pill {
+      position: absolute;
+      z-index: 8;
+      right: 85px;
+      bottom: 82px;
+      padding: 24px 40px;
+      border: 2px solid rgba(255, 255, 255, .24);
+      border-radius: 999px;
+      color: #003c32;
+      background: #95f4dc;
+      box-shadow: 0 16px 36px rgba(0, 30, 24, .30);
+      font-size: 34px;
+      font-weight: 720;
+    }
+  </style>
+</head>
+<body>
+  <main class="slide">
+    <div class="brand">
+      <img src="../assets/images/play-store/app_icon.png" alt="">
+      <span>AdGuard Home Client</span>
+    </div>
+    <section class="copy">
+      <h1 id="title"></h1>
+      <p class="subtitle" id="subtitle"></p>
+    </section>
+    <div id="devices"></div>
+    <div class="feature-pill" id="pill"></div>
+  </main>
+  <script>
+    const slides = [
+      {
+        title: "Protection that fits your day.",
+        subtitle: "Pause filtering for a moment—or until you are ready to resume.",
+        pill: "Timed protection",
+        images: ["01b-pause-protection.png"]
+      },
+      {
+        title: "Understand every DNS request.",
+        subtitle: "Search, filter, and inspect your query history in seconds.",
+        pill: "Query log",
+        images: ["02-query-log.png"]
+      },
+      {
+        title: "Your data. Your rules.",
+        subtitle: "Control retention, anonymization, and privacy settings from one clear view.",
+        pill: "Privacy controls",
+        images: ["03-privacy.png"]
+      },
+      {
+        title: "See how DNS is really configured.",
+        subtitle: "Inspect resolvers, fallback servers, DNSSEC, cache, and runtime limits.",
+        pill: "DNS diagnostics",
+        images: ["04-dns-diagnostics.png"]
+      },
+      {
+        title: "Block distractions on your schedule.",
+        subtitle: "Choose services, then decide exactly when they should be available.",
+        pill: "Scheduled blocking",
+        images: ["05-blocked-services.png", "05b-blocked-services-schedule.png"]
+      },
+      {
+        title: "Know which upstream performs best.",
+        subtitle: "Compare resolver traffic and response times without leaving the dashboard.",
+        pill: "Upstream insights",
+        images: ["06b-upstream-performance.png"]
+      },
+      {
+        title: "A policy for every device.",
+        subtitle: "Give clients individual ad blocking, parental, and browsing protection.",
+        pill: "Per-client controls",
+        images: ["06-clients.png"]
+      },
+      {
+        title: "Filtering, down to the last rule.",
+        subtitle: "Manage blocklists and local DNS rewrites with fast, focused tools.",
+        pill: "Filters & rewrites",
+        images: ["07-filters.png", "07b-dns-rewrites.png"]
+      }
+    ];
+
+    const slideNumber = Math.min(Math.max(Number(new URLSearchParams(location.search).get("slide")) || 1, 1), slides.length);
+    const slide = slides[slideNumber - 1];
+    document.querySelector(".slide").classList.add(`slide-${slideNumber}`);
+    document.getElementById("title").textContent = slide.title;
+    document.getElementById("subtitle").textContent = slide.subtitle;
+    document.getElementById("pill").textContent = slide.pill;
+
+    const status = `<div class="status"><span class="time">10:00</span><span class="camera"></span><span class="icons">⌁ 5G ▮</span></div>`;
+    document.getElementById("devices").innerHTML = slide.images.map((image, index) => {
+      const classes = slide.images.length > 1 ? `device dual ${index === 0 ? "first" : "second"}` : "device";
+      return `<div class="${classes}"><div class="screen">${status}<div class="viewport"><img class="capture" src="../assets/images/play-store/screenshots/raw-2026/${image}" alt=""></div></div></div>`;
+    }).join("");
+  </script>
+</body>
+</html>

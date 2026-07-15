@@ -5,10 +5,27 @@ class AdGuardHomeSafeBrowsing {
   AdGuardHomeSafeBrowsing(this._adGuardHome);
 
   Future<bool> enabled() async {
-    final response = await _adGuardHome.request('safebrowsing/status');
-    return response['enabled'] ?? false;
+    if (_adGuardHome.isDemo) {
+      return _adGuardHome.demoSafeBrowsing;
+    }
+    final response = await _adGuardHome.restClient.safebrowsing
+        .safebrowsingStatus();
+    return response.enabled ?? false;
   }
 
-  Future<void> enable() async => _adGuardHome.request('safebrowsing/enable', method: 'POST');
-  Future<void> disable() async => _adGuardHome.request('safebrowsing/disable', method: 'POST');
+  Future<void> enable() async {
+    if (_adGuardHome.isDemo) {
+      _adGuardHome.demoSafeBrowsing = true;
+      return;
+    }
+    await _adGuardHome.restClient.safebrowsing.safebrowsingEnable();
+  }
+
+  Future<void> disable() async {
+    if (_adGuardHome.isDemo) {
+      _adGuardHome.demoSafeBrowsing = false;
+      return;
+    }
+    await _adGuardHome.restClient.safebrowsing.safebrowsingDisable();
+  }
 }

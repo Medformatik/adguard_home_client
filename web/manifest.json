@@ -1,11 +1,11 @@
 {
-    "name": "adguard_home_client",
-    "short_name": "adguard_home_client",
+    "name": "AdGuard Home Client",
+    "short_name": "AdGuard Home",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F4FBF9",
+    "theme_color": "#006C67",
+    "description": "A control and monitoring app for AdGuard Home instances.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

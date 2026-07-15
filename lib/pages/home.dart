@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:adguard_home_client/interface/stats.dart';
 import 'package:adguard_home_client/main.dart';
 import 'package:adguard_home_client/pages/settings.dart';
 import 'package:adguard_home_client/utils/datasource.dart';
 import 'package:adguard_home_client/utils/init.dart';
 import 'package:adguard_home_client/utils/instances.dart';
+import 'package:adguard_home_client/utils/messages.dart';
 import 'package:adguard_home_client/widgets/statistics_card.dart';
 import 'package:adguard_home_client/widgets/statistics_table_card.dart';
 import 'package:flutter/material.dart';
@@ -43,58 +46,100 @@ class _HomePageState extends State<HomePage> {
     final fut = ds.snapshot();
     _snapshot = fut;
     _version = ds.version();
-    fut.then((snap) {
-      if (!mounted) return;
-      setState(() => _lastSnapshot = snap);
-    }).catchError((_) {});
+    fut
+        .then((snap) {
+          if (!mounted) return;
+          setState(() => _lastSnapshot = snap);
+        })
+        .catchError((_) {});
   }
 
   Future<void> _showInstanceSwitcher(BuildContext context) async {
     final result = await showModalBottomSheet<_SwitcherResult>(
       context: context,
       showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (context) {
         final instances = Instances.list();
         final activeId = Instances.getActiveId();
+        final theme = Theme.of(context);
+
+        final showUnified = instances.length >= 2;
+
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Switch instance', style: Theme.of(context).textTheme.titleMedium),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 12),
+                  child: Text(
+                    'Switch instance',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
-              if (instances.length >= 2)
-                _switcherTile(
-                  context,
-                  isActive: activeId == Instances.unifiedId,
-                  icon: Icons.merge_type,
-                  title: 'Unified',
-                  subtitle: 'Aggregated across all instances',
-                  onTap: () => Navigator.pop(context, _SwitcherResult.switchTo(Instances.unifiedId)),
+                Card.filled(
+                  margin: EdgeInsets.zero,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Column(
+                      children: [
+                        if (showUnified)
+                          _switcherTile(
+                            context,
+                            isActive: activeId == Instances.unifiedId,
+                            icon: Icons.merge_type,
+                            title: 'Unified',
+                            subtitle: 'Aggregated across all instances',
+                            onTap: () {
+                              Navigator.pop(
+                                context,
+                                _SwitcherResult.switchTo(Instances.unifiedId),
+                              );
+                            },
+                          ),
+                        ...instances.map((i) {
+                          final isActive = i.id == activeId;
+                          return _switcherTile(
+                            context,
+                            isActive: isActive,
+                            icon: null,
+                            title: i.name.isEmpty ? '(unnamed)' : i.name,
+                            subtitle:
+                                '${i.tls ? 'https' : 'http'}://${i.host}:${i.port}',
+                            onTap: () {
+                              Navigator.pop(
+                                context,
+                                _SwitcherResult.switchTo(i.id),
+                              );
+                            },
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
                 ),
-              ...instances.map((i) {
-                final isActive = i.id == activeId;
-                return _switcherTile(
-                  context,
-                  isActive: isActive,
-                  icon: null,
-                  title: i.name.isEmpty ? '(unnamed)' : i.name,
-                  subtitle: '${i.tls ? 'https' : 'http'}://${i.host}:${i.port}',
-                  onTap: () => Navigator.pop(context, _SwitcherResult.switchTo(i.id)),
-                );
-              }),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('Manage instances'),
-                onTap: () => Navigator.pop(context, _SwitcherResult.manage()),
-              ),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.settings),
+                  title: const Text(
+                    'Manage instances',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  onTap: () => Navigator.pop(context, _SwitcherResult.manage()),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -113,11 +158,10 @@ class _HomePageState extends State<HomePage> {
         setState(_load);
         _protectionsKey.currentState?.reload();
       } else {
-        ScaffoldMessenger.of(this.context).showSnackBar(
-          SnackBar(
-            content: Text('Could not connect to "${activeLabelFor(result.switchToId) ?? "instance"}"'),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showMessage(
+          this.context,
+          'Could not connect to "${activeLabelFor(result.switchToId) ?? "instance"}"',
+          error: true,
         );
       }
     }
@@ -132,13 +176,16 @@ class _HomePageState extends State<HomePage> {
     required VoidCallback onTap,
   }) {
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: Icon(
-        isActive ? Icons.radio_button_checked : (icon ?? Icons.radio_button_unchecked),
+        isActive
+            ? Icons.radio_button_checked
+            : (icon ?? Icons.radio_button_unchecked),
         color: isActive ? Theme.of(context).colorScheme.primary : null,
       ),
-      title: Text(title),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(subtitle),
-      onTap: isActive ? null : onTap,
+      onTap: isActive ? () => Navigator.pop(context) : onTap,
     );
   }
 
@@ -150,12 +197,7 @@ class _HomePageState extends State<HomePage> {
       await _snapshot;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to refresh: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showMessage(context, 'Failed to refresh: $e', error: true);
       }
     }
   }
@@ -168,9 +210,9 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: InkWell(
           onTap: () => _showInstanceSwitcher(context),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -184,6 +226,7 @@ class _HomePageState extends State<HomePage> {
                         builder: (context, name, _) => Text(
                           name?.isNotEmpty == true ? name! : 'AdGuard Home',
                           overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       FutureBuilder<String?>(
@@ -191,7 +234,11 @@ class _HomePageState extends State<HomePage> {
                         builder: (context, snapshot) {
                           return Text(
                             snapshot.hasData ? snapshot.data! : 'Loading...',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
                             overflow: TextOverflow.ellipsis,
                           );
                         },
@@ -205,7 +252,11 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
-        actions: const [_QueryLogButton(), _SettingsButton(), _ProtectionToggleButton()],
+        actions: const [
+          _QueryLogButton(),
+          _SettingsButton(),
+          _ProtectionToggleButton(),
+        ],
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -215,18 +266,24 @@ class _HomePageState extends State<HomePage> {
             builder: (context, asyncSnap) {
               final data = asyncSnap.data ?? _lastSnapshot;
               if (data != null) {
-                return _scrollable(_StatsBody(snapshot: data, protectionsKey: _protectionsKey));
+                return _scrollable(
+                  _StatsBody(snapshot: data, protectionsKey: _protectionsKey),
+                );
               }
               if (asyncSnap.hasError) {
-                return _scrollable(_ErrorBlock(
-                  message: 'Could not load statistics.',
-                  onRetry: _refresh,
-                ));
+                return _scrollable(
+                  _ErrorBlock(
+                    message: 'Could not load statistics.',
+                    onRetry: _refresh,
+                  ),
+                );
               }
-              return _scrollable(const Padding(
-                padding: EdgeInsets.symmetric(vertical: 96),
-                child: Center(child: CircularProgressIndicator()),
-              ));
+              return _scrollable(
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 96),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              );
             },
           ),
         ),
@@ -238,7 +295,7 @@ class _HomePageState extends State<HomePage> {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: child,
       ),
     );
@@ -259,10 +316,13 @@ class _StatsBody extends StatelessWidget {
       children: [
         _ProtectionsCard(key: protectionsKey),
         Padding(
-          padding: const EdgeInsets.fromLTRB(8.0, 0, 0.0, 0),
+          padding: const EdgeInsets.fromLTRB(8.0, 12.0, 0.0, 0),
           child: Text(
             'Statistics for the last ${snapshot.period} days',
-            style: Theme.of(context).textTheme.headlineSmall,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: scheme.onSurface.withValues(alpha: 0.65),
+            ),
           ),
         ),
         StatisticsCard(
@@ -272,7 +332,7 @@ class _StatsBody extends StatelessWidget {
           secondarySuffix: 'ms',
           graph: snapshot.dnsQueriesPerDay,
           title: 'DNS Queries',
-          textColor: Colors.blue,
+          textColor: scheme.primary,
           icon: Icons.dns,
         ),
         StatisticsCard(
@@ -281,27 +341,27 @@ class _StatsBody extends StatelessWidget {
           secondarySuffix: '%',
           graph: snapshot.blockedFilteringPerDay,
           title: 'Blocked by Filters',
-          textColor: Colors.red,
+          textColor: scheme.error,
           icon: Icons.security,
         ),
         StatisticsCard(
           primary: snapshot.replacedSafebrowsing,
           graph: snapshot.replacedSafebrowsingPerDay,
           title: 'Blocked malware/phishing',
-          textColor: Colors.green[500]!,
+          textColor: scheme.tertiary,
           icon: Icons.coronavirus,
         ),
         StatisticsCard(
           primary: snapshot.replacedParental,
           graph: snapshot.replacedParentalPerDay,
           title: 'Blocked adult websites',
-          textColor: Colors.yellow[700]!,
+          textColor: scheme.secondary,
           icon: Icons.person,
         ),
         StatisticsCard(
           primary: snapshot.replacedSafesearch,
           title: 'Enforced safe search',
-          textColor: Colors.purple[500]!,
+          textColor: scheme.primary,
           icon: Icons.search,
         ),
         StatisticsTableCard(
@@ -310,7 +370,7 @@ class _StatsBody extends StatelessWidget {
           title: 'Top queried domains',
           keyColumn: 'Domain',
           valueColumn: 'Count',
-          textColor: Colors.blue,
+          textColor: scheme.primary,
           icon: Icons.dns,
         ),
         StatisticsTableCard(
@@ -319,7 +379,7 @@ class _StatsBody extends StatelessWidget {
           title: 'Top blocked domains',
           keyColumn: 'Domain',
           valueColumn: 'Count',
-          textColor: Colors.red,
+          textColor: scheme.error,
           icon: Icons.security,
         ),
         StatisticsTableCard(
@@ -330,6 +390,28 @@ class _StatsBody extends StatelessWidget {
           valueColumn: 'Count',
           textColor: scheme.onSurface,
           icon: Icons.people,
+        ),
+        StatisticsTableCard(
+          data: snapshot.topUpstreamsResponses,
+          total: snapshot.topUpstreamsResponses.values.fold<int>(
+            0,
+            (a, b) => a + b,
+          ),
+          title: 'Upstream responses',
+          keyColumn: 'Upstream',
+          valueColumn: 'Responses',
+          textColor: scheme.tertiary,
+          icon: Icons.swap_vert_circle_outlined,
+        ),
+        StatisticsTableCard(
+          data: snapshot.topUpstreamsAvgTime,
+          title: 'Upstream response time',
+          keyColumn: 'Upstream',
+          valueColumn: 'Average',
+          valueSuffix: ' ms',
+          fractionDigits: 2,
+          textColor: scheme.secondary,
+          icon: Icons.speed_outlined,
         ),
       ],
     );
@@ -350,6 +432,8 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
   bool _loaded = false;
   bool _loading = true;
   String? _error;
+  DateTime? _pauseUntil;
+  Timer? _pauseTimer;
 
   @override
   void initState() {
@@ -358,6 +442,32 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
   }
 
   void reload() => _load();
+
+  @override
+  void dispose() {
+    _pauseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _setPauseRemaining(Duration? remaining) {
+    _pauseTimer?.cancel();
+    _pauseTimer = null;
+    _pauseUntil = remaining == null || remaining <= Duration.zero
+        ? null
+        : DateTime.now().add(remaining);
+    if (_pauseUntil == null) return;
+    _pauseTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_pauseUntil!.isAfter(DateTime.now())) {
+        setState(() {});
+      } else {
+        _pauseTimer?.cancel();
+        _pauseTimer = null;
+        _pauseUntil = null;
+        _load();
+      }
+    });
+  }
 
   Future<void> _load() async {
     if (!_loaded) {
@@ -369,17 +479,19 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
     try {
       final ds = dataSource!;
       final results = await Future.wait([
-        ds.protectionEnabled(),
+        ds.protectionSummary(),
         ds.safeBrowsingEnabled(),
         ds.parentalEnabled(),
         ds.safeSearchEnabled(),
       ]);
       if (!mounted) return;
-      protectionStatus.value = results[0];
+      final protection = results[0] as ProtectionSummary;
+      protectionStatus.value = protection.state;
+      _setPauseRemaining(protection.remaining);
       setState(() {
-        _safeBrowsing = results[1];
-        _parental = results[2];
-        _safeSearch = results[3];
+        _safeBrowsing = results[1] as ToggleState;
+        _parental = results[2] as ToggleState;
+        _safeSearch = results[3] as ToggleState;
         _loading = false;
         _loaded = true;
         _error = null;
@@ -400,16 +512,46 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
     protectionStatus.value = next ? ToggleState.on : ToggleState.off;
     try {
       await dataSource!.setProtection(next);
+      if (next) _setPauseRemaining(null);
     } catch (e) {
       protectionStatus.value = current;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to update Protection'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showMessage(context, 'Failed to update protection', error: true);
     }
+  }
+
+  Future<void> _pauseProtection(Duration? duration) async {
+    final previous = protectionStatus.value;
+    protectionStatus.value = ToggleState.off;
+    _setPauseRemaining(duration);
+    try {
+      await dataSource!.setProtection(false, pauseFor: duration);
+    } catch (e) {
+      protectionStatus.value = previous;
+      _setPauseRemaining(null);
+      if (mounted) {
+        showMessage(context, 'Failed to pause protection', error: true);
+      }
+    }
+  }
+
+  Future<void> _showPauseOptions() async {
+    final result = await showModalBottomSheet<_PauseChoice>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => const _PauseProtectionSheet(),
+    );
+    if (result != null) await _pauseProtection(result.duration);
+  }
+
+  String? get _pauseSubtitle {
+    final until = _pauseUntil;
+    if (until == null) return null;
+    final remaining = until.difference(DateTime.now());
+    if (remaining <= Duration.zero) return null;
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds.remainder(60);
+    return 'Paused · ${minutes > 0 ? '${minutes}m ' : ''}${seconds}s remaining';
   }
 
   Future<void> _toggle({
@@ -426,81 +568,151 @@ class _ProtectionsCardState extends State<_ProtectionsCard> {
     } catch (e) {
       if (!mounted) return;
       commit(current);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update $label'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showMessage(context, 'Failed to update $label', error: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: _loading
-            ? const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            : _error != null
-                ? Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        const Expanded(child: Text('Could not load protection settings.')),
-                        TextButton(onPressed: _load, child: const Text('Retry')),
-                      ],
-                    ),
-                  )
-                : Column(
-                    children: [
-                      ValueListenableBuilder<ToggleState>(
-                        valueListenable: protectionStatus,
-                        builder: (context, value, _) => _CompactToggle(
-                          label: 'Protection',
-                          icon: Icons.shield,
-                          state: value,
-                          onChanged: _toggleProtection,
-                        ),
-                      ),
-                      _CompactToggle(
-                        label: 'Safe Browsing',
-                        icon: Icons.coronavirus,
-                        state: _safeBrowsing,
-                        onChanged: () => _toggle(
-                          label: 'Safe Browsing',
-                          current: _safeBrowsing,
-                          apply: dataSource!.setSafeBrowsing,
-                          commit: (val) => setState(() => _safeBrowsing = val),
-                        ),
-                      ),
-                      _CompactToggle(
-                        label: 'Parental Control',
-                        icon: Icons.person,
-                        state: _parental,
-                        onChanged: () => _toggle(
-                          label: 'Parental Control',
-                          current: _parental,
-                          apply: dataSource!.setParental,
-                          commit: (val) => setState(() => _parental = val),
-                        ),
-                      ),
-                      _CompactToggle(
-                        label: 'Safe Search',
-                        icon: Icons.search,
-                        state: _safeSearch,
-                        onChanged: () => _toggle(
-                          label: 'Safe Search',
-                          current: _safeSearch,
-                          apply: dataSource!.setSafeSearch,
-                          commit: (val) => setState(() => _safeSearch = val),
-                        ),
-                      ),
-                    ],
+    if (_loading) {
+      return Card.filled(
+        child: const Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    if (_error != null) {
+      return Card.filled(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text('Could not load protection settings.'),
+              ),
+              TextButton(onPressed: _load, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ValueListenableBuilder<ToggleState>(
+      valueListenable: protectionStatus,
+      builder: (context, overallProtection, _) {
+        return Card.filled(
+          margin: EdgeInsets.zero,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Column(
+              children: [
+                _CompactToggle(
+                  label: 'Protection',
+                  icon: Icons.shield,
+                  state: overallProtection,
+                  onTap: _toggleProtection,
+                  subtitle: _pauseSubtitle,
+                  extraAction: IconButton.filledTonal(
+                    style: _primaryContainerIconButtonStyle(context),
+                    tooltip: 'Pause protection',
+                    onPressed: overallProtection.isReady
+                        ? _showPauseOptions
+                        : null,
+                    icon: const Icon(Icons.timer_outlined),
                   ),
+                ),
+                _CompactToggle(
+                  label: 'Safe Browsing',
+                  icon: Icons.coronavirus,
+                  state: _safeBrowsing,
+                  onTap: () {
+                    _toggle(
+                      label: 'Safe Browsing',
+                      current: _safeBrowsing,
+                      apply: dataSource!.setSafeBrowsing,
+                      commit: (val) => setState(() => _safeBrowsing = val),
+                    );
+                  },
+                ),
+                _CompactToggle(
+                  label: 'Parental Control',
+                  icon: Icons.person,
+                  state: _parental,
+                  onTap: () {
+                    _toggle(
+                      label: 'Parental Control',
+                      current: _parental,
+                      apply: dataSource!.setParental,
+                      commit: (val) => setState(() => _parental = val),
+                    );
+                  },
+                ),
+                _CompactToggle(
+                  label: 'Safe Search',
+                  icon: Icons.search,
+                  state: _safeSearch,
+                  onTap: () {
+                    _toggle(
+                      label: 'Safe Search',
+                      current: _safeSearch,
+                      apply: dataSource!.setSafeSearch,
+                      commit: (val) => setState(() => _safeSearch = val),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PauseChoice {
+  const _PauseChoice(this.duration);
+
+  final Duration? duration;
+}
+
+class _PauseProtectionSheet extends StatelessWidget {
+  const _PauseProtectionSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Text(
+                'Pause protection',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            for (final option in const [
+              ('30 seconds', Duration(seconds: 30)),
+              ('5 minutes', Duration(minutes: 5)),
+              ('15 minutes', Duration(minutes: 15)),
+              ('1 hour', Duration(hours: 1)),
+            ])
+              ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: Text(option.$1),
+                onTap: () => Navigator.pop(context, _PauseChoice(option.$2)),
+              ),
+            ListTile(
+              leading: const Icon(Icons.pause_circle_outline),
+              title: const Text('Until resumed'),
+              onTap: () => Navigator.pop(context, const _PauseChoice(null)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -510,13 +722,17 @@ class _CompactToggle extends StatelessWidget {
   final String label;
   final IconData icon;
   final ToggleState state;
-  final VoidCallback onChanged;
+  final VoidCallback onTap;
+  final String? subtitle;
+  final Widget? extraAction;
 
   const _CompactToggle({
     required this.label,
     required this.icon,
     required this.state,
-    required this.onChanged,
+    required this.onTap,
+    this.subtitle,
+    this.extraAction,
   });
 
   @override
@@ -524,39 +740,55 @@ class _CompactToggle extends StatelessWidget {
     final disabled = !state.isReady;
     final mixed = state.isMixed;
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: disabled ? null : onChanged,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: disabled ? scheme.onSurface.withValues(alpha: 0.5) : null),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(color: disabled ? scheme.onSurface.withValues(alpha: 0.5) : null),
-              ),
-            ),
-            if (mixed)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(
-                  'Mixed',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurface.withValues(alpha: 0.6)),
-                ),
-              ),
-            Transform.scale(
-              scale: 0.8,
-              child: Switch(
-                value: state.isOn,
-                onChanged: disabled ? null : (_) => onChanged(),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
+
+    final Color iconColor;
+    if (state.isOn) {
+      if (label == 'Protection') {
+        iconColor = scheme.primary;
+      } else if (label == 'Safe Browsing') {
+        iconColor = scheme.tertiary;
+      } else if (label == 'Parental Control') {
+        iconColor = scheme.secondary;
+      } else {
+        iconColor = scheme.primary;
+      }
+    } else {
+      iconColor = scheme.onSurface.withValues(alpha: 0.4);
+    }
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      leading: Icon(icon, size: 22, color: iconColor),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: disabled ? scheme.onSurface.withValues(alpha: 0.4) : null,
         ),
       ),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (extraAction != null) ...[extraAction!, const SizedBox(width: 8)],
+          if (mixed)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                'Mixed',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurface.withValues(alpha: 0.5),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          Switch(
+            value: state.isOn,
+            onChanged: disabled ? null : (_) => onTap(),
+          ),
+        ],
+      ),
+      onTap: disabled ? null : onTap,
     );
   }
 }
@@ -573,14 +805,24 @@ class _ErrorBlock extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+          Icon(
+            Icons.error_outline,
+            size: 48,
+            color: Theme.of(context).colorScheme.error,
+          ),
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          FilledButton.icon(
+          FilledButton.tonal(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.refresh, size: 16),
+                SizedBox(width: 8),
+                Text('Retry'),
+              ],
+            ),
           ),
         ],
       ),
@@ -593,7 +835,8 @@ class _QueryLogButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    return IconButton.filledTonal(
+      style: _primaryContainerIconButtonStyle(context),
       icon: const Icon(Icons.list_alt),
       tooltip: 'Query log',
       onPressed: () => Navigator.pushNamed(context, '/querylog'),
@@ -607,6 +850,7 @@ class _SettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton.filledTonal(
+      style: _primaryContainerIconButtonStyle(context),
       icon: const Icon(Icons.settings),
       tooltip: 'Settings',
       onPressed: () => Navigator.pushNamed(context, '/settings'),
@@ -614,11 +858,22 @@ class _SettingsButton extends StatelessWidget {
   }
 }
 
+ButtonStyle _primaryContainerIconButtonStyle(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return IconButton.styleFrom(
+    backgroundColor: scheme.primaryContainer,
+    foregroundColor: scheme.onPrimaryContainer,
+    disabledBackgroundColor: scheme.onSurface.withValues(alpha: 0.12),
+    disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.38),
+  );
+}
+
 class _ProtectionToggleButton extends StatefulWidget {
   const _ProtectionToggleButton();
 
   @override
-  State<_ProtectionToggleButton> createState() => _ProtectionToggleButtonState();
+  State<_ProtectionToggleButton> createState() =>
+      _ProtectionToggleButtonState();
 }
 
 class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
@@ -626,9 +881,12 @@ class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
   void initState() {
     super.initState();
     if (instanceConfigured && protectionStatus.value.isLoading) {
-      dataSource!.protectionEnabled().then((v) {
-        if (mounted) protectionStatus.value = v;
-      }).catchError((_) {});
+      dataSource!
+          .protectionEnabled()
+          .then((v) {
+            if (mounted) protectionStatus.value = v;
+          })
+          .catchError((_) {});
     }
   }
 
@@ -642,51 +900,44 @@ class _ProtectionToggleButtonState extends State<_ProtectionToggleButton> {
     } catch (e) {
       protectionStatus.value = current;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not toggle protection: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showMessage(context, 'Could not toggle protection: $e', error: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ValueListenableBuilder<ToggleState>(
-        valueListenable: protectionStatus,
-        builder: (context, value, _) {
-          if (value.isLoading) {
-            return IconButton.filledTonal(
-              icon: const SizedBox(
-                height: 16,
-                width: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              onPressed: null,
-            );
-          }
-          if (value.isMixed) {
-            return IconButton.filledTonal(
-              icon: const Icon(Icons.shield_moon_outlined),
-              tooltip: 'Protection differs across instances',
-              onPressed: null,
-            );
-          }
-          final on = value.isOn;
-          return IconButton.filled(
-            style: IconButton.styleFrom(
-              backgroundColor: on ? Colors.red : Colors.green[700],
-              foregroundColor: Colors.white,
+    final scheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<ToggleState>(
+      valueListenable: protectionStatus,
+      builder: (context, value, _) {
+        if (value.isLoading) {
+          return IconButton.filledTonal(
+            icon: const SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            icon: Icon(on ? Icons.shield_outlined : Icons.shield),
-            tooltip: on ? 'Disable protection' : 'Enable protection',
-            onPressed: _toggle,
+            onPressed: null,
           );
-        },
-      ),
+        }
+        if (value.isMixed) {
+          return IconButton.filledTonal(
+            icon: const Icon(Icons.shield_moon_outlined),
+            tooltip: 'Protection differs across instances',
+            onPressed: null,
+          );
+        }
+        final on = value.isOn;
+        return IconButton.filled(
+          style: IconButton.styleFrom(
+            backgroundColor: on ? scheme.error : scheme.primary,
+            foregroundColor: on ? scheme.onError : scheme.onPrimary,
+          ),
+          icon: Icon(on ? Icons.shield_outlined : Icons.shield),
+          tooltip: on ? 'Disable protection' : 'Enable protection',
+          onPressed: _toggle,
+        );
+      },
     );
   }
 }
